@@ -1,6 +1,6 @@
 # Inkwell
 
-![License](https://img.shields.io/badge/License-MIT-blue)
+![License](https://img.shields.io/badge/License-NonCommercial-red)
 ![Size](https://img.shields.io/badge/体积-3MB_单文件-success)
 ![Platform](https://img.shields.io/badge/平台-Windows_10%2B-lightgrey)
 ![Version](https://img.shields.io/badge/版本-v0.11a-orange)
@@ -124,7 +124,11 @@
 
 ## 📄 协议
 
-[MIT License](LICENSE) — 可自由使用、修改、分发和商用，只需保留原版权声明。
+**非商业使用许可** — 详见 [LICENSE](LICENSE)
+
+- ✅ **允许**：个人学习、使用、修改、非商业分享（须保留版权与许可声明）
+- ❌ **禁止**：未经授权的商业使用——销售本软件、企业/组织内部使用、集成进商业产品或收费服务等
+- 💼 **商业授权**：gavin.zhang815@gmail.com
 
 ---
 
