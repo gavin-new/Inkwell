@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Inkwell</AssemblyName>
+    <RootNamespace>Inkwell</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+
+    <!-- 发布配置：framework-dependent + 单文件 + ReadyToRun -->
+    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">true</PublishSingleFile>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">false</SelfContained>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+    <RuntimeIdentifier Condition="'$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(Configuration)' == 'Release'">true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType Condition="'$(Configuration)' == 'Release'">embedded</DebugType>
+    <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- 排除 XML 文档文件（减小单文件 EXE 体积） -->
+    <AllowedReferenceRelatedFileExtensions Condition="'$(Configuration)' == 'Release'">$(AllowedReferenceRelatedFileExtensions);xml</AllowedReferenceRelatedFileExtensions>
+    <PublishDocumentationFiles Condition="'$(Configuration)' == 'Release'">false</PublishDocumentationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- 走 netcoreapp3.0 路径，避免拉入 24.8MB 的 Microsoft.Windows.SDK.NET.dll -->
+    <WebView2UseWinRT>false</WebView2UseWinRT>
+  </PropertyGroup>
+
+  <!-- wwwroot 压缩成 zip 后嵌入到 EXE 资源 -->
+  <Target Name="ZipWwwRoot" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <WwwRootZipSource>$(MSBuildProjectDirectory)\EmbeddedAssets</WwwRootZipSource>
+      <WwwRootZipOutput>$(IntermediateOutputPath)wwwroot.zip</WwwRootZipOutput>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" Condition="!Exists('$(IntermediateOutputPath)')" />
+    <Delete Files="$(WwwRootZipOutput)" Condition="Exists('$(WwwRootZipOutput)')" />
+    <ZipDirectory SourceDirectory="$(WwwRootZipSource)" DestinationFile="$(WwwRootZipOutput)" Overwrite="true" />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(IntermediateOutputPath)wwwroot.zip">
+      <LogicalName>Inkwell.wwwroot.zip</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\app.ico">
+      <LogicalName>Inkwell.Resources.app.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

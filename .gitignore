@@ -1,0 +1,21 @@
+# Build artifacts
+src/bin/
+src/obj/
+src/Resources/*.cache
+dist/wwwroot/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor
+*.swp
+*.swo
+*~
