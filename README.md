@@ -87,7 +87,7 @@
 
 ### 安装
 
-1. 下载 [dist/Inkwell.exe](dist/Inkwell.exe)（约 3 MB）
+1. 从 [GitHub Releases](https://github.com/gavin-new/Inkwell/releases/latest) 下载 `Inkwell.exe`（约 3 MB）
 2. 双击运行，**第一次**会弹出 .NET 10 / WebView2 Runtime 检测（缺哪个装哪个，一次性）
 3. 开始写
 
