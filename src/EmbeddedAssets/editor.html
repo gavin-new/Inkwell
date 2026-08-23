@@ -1729,6 +1729,9 @@
               <button class="pane-action" id="close-workspace-btn" onclick="closeWorkspace()" data-i18n-title="closeWorkspace" title="关闭工作区" style="display:none;">
                 <svg class="icon icon-sm"><use href="#icon-close"></use></svg>
               </button>
+              <button class="pane-action" id="file-tree-collapse-btn" onclick="togglePane('fileTree')" data-i18n-title="collapsePane" title="折叠文件树" data-pane="fileTree">
+                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-up"></use></svg>
+              </button>
             </div>
             <div class="file-tree" id="file-tree">
               <div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>
@@ -1742,6 +1745,9 @@
               <span class="pane-title" data-i18n="outline">大纲</span>
               <button class="pane-action" onclick="refreshOutline()" data-i18n-title="refresh" title="刷新大纲">
                 <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
+              </button>
+              <button class="pane-action" id="outline-collapse-btn" onclick="togglePane('outline')" data-i18n-title="collapsePane" title="折叠大纲" data-pane="outline">
+                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-down"></use></svg>
               </button>
             </div>
             <div class="outline-list" id="outline-list">
@@ -1758,7 +1764,9 @@
         <div class="pane-header">
           <span class="pane-title" id="current-file-name" data-i18n="editorPaneTitle">编辑</span>
           <span data-i18n="editorPaneHint">支持 Markdown 语法</span>
-          <button class="pane-action" id="editor-collapse-btn" onclick="togglePane('editor')" title="收起编辑区"><svg class="icon icon-sm"><use href="#icon-chevron-left"></use></svg></button>
+          <button class="pane-action" id="editor-collapse-btn" onclick="togglePane('editor')" data-i18n-title="collapsePane" title="折叠编辑区" data-pane="editor">
+            <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-left"></use></svg>
+          </button>
         </div>
         <textarea id="editor" data-i18n-placeholder="editorPlaceholder" placeholder="开始输入 Markdown..." spellcheck="false"></textarea>
       </div>
@@ -1775,7 +1783,9 @@
               <button class="toggle-btn" data-mode="source" onclick="setPreviewMode('source')" data-i18n="sourceTab">源码</button>
             </div>
             <span id="word-count">0 字</span>
-            <button class="pane-action" id="preview-collapse-btn" onclick="togglePane('preview')" title="收起预览区"><svg class="icon icon-sm"><use href="#icon-chevron-right"></use></svg></button>
+            <button class="pane-action" id="preview-collapse-btn" onclick="togglePane('preview')" data-i18n-title="collapsePane" title="折叠预览" data-pane="preview">
+              <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-up"></use></svg>
+            </button>
           </div>
           <div class="preview-content" id="preview"></div>
           <textarea id="preview-source" class="preview-source" data-i18n-placeholder="previewSourcePlaceholder" placeholder="在此编辑 Markdown 源码..." spellcheck="false"></textarea>
@@ -1796,6 +1806,9 @@
             </select>
             <button class="pane-action" onclick="openAiSettings()" data-i18n-title="aiSettings" title="AI 大模型设置"><svg class="icon icon-sm"><use href="#icon-settings"></use></svg></button>
             <button class="pane-action" onclick="clearAiChat()" data-i18n-title="clearChat" title="清空对话"><svg class="icon icon-sm"><use href="#icon-trash"></use></svg></button>
+            <button class="pane-action" id="ai-collapse-btn" onclick="togglePane('ai')" data-i18n-title="collapsePane" title="折叠 AI 大模型" data-pane="ai">
+              <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-down"></use></svg>
+            </button>
           </div>
           <div class="ai-chat" id="ai-chat">
             <div class="ai-chat-empty" data-i18n="aiChatEmpty">输入内容与 AI 模型对话（润色 / 翻译 / 续写）</div>
