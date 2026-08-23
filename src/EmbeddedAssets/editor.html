@@ -1726,6 +1726,9 @@
               <button class="pane-action" onclick="refreshFileTree()" data-i18n-title="refresh" title="刷新">
                 <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
               </button>
+              <button class="pane-action" id="close-workspace-btn" onclick="closeWorkspace()" data-i18n-title="closeWorkspace" title="关闭工作区" style="display:none;">
+                <svg class="icon icon-sm"><use href="#icon-close"></use></svg>
+              </button>
             </div>
             <div class="file-tree" id="file-tree">
               <div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>
@@ -2238,10 +2241,39 @@
           localStorage.setItem('inkwell_workspace_root', folder);
           await loadFileTree(folder);
           document.getElementById('file-tree-title').textContent = folder.split(/[\\/]/).pop() || folder;
+          // 显示关闭按钮
+          const closeBtn = document.getElementById('close-workspace-btn');
+          if (closeBtn) closeBtn.style.display = '';
         }
       } catch (e) {
         showToast('打开文件夹失败: ' + e.message, 'error');
       }
+    }
+
+    // 关闭工作区：清掉当前根目录 + 缓存的 lastPath
+    // 不影响当前打开的编辑器内容（用户可以继续编辑）
+    function closeWorkspace() {
+      if (!currentWorkspaceRoot) {
+        showToast('当前没有打开工作区', 'info');
+        return;
+      }
+      const ok = confirm('关闭工作区？\n\n当前打开的文件夹会从左侧文件树移除（不影响已打开的文档）。');
+      if (!ok) return;
+      currentWorkspaceRoot = null;
+      activeFilePath = null;
+      try { localStorage.removeItem('inkwell_workspace_root'); } catch {}
+      try { localStorage.removeItem('inkwell_last_path'); } catch {}
+      // 重置文件树 UI
+      const container = document.getElementById('file-tree');
+      if (container) {
+        container.innerHTML = '<div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>';
+      }
+      const title = document.getElementById('file-tree-title');
+      if (title) title.textContent = (window.t ? t('fileTree') : '文件');
+      // 隐藏关闭按钮
+      const closeBtn = document.getElementById('close-workspace-btn');
+      if (closeBtn) closeBtn.style.display = 'none';
+      showToast('已关闭工作区', 'success');
     }
 
     async function refreshFileTree() {
@@ -2403,6 +2435,11 @@
     if (savedRoot) {
       currentWorkspaceRoot = savedRoot;
       loadFileTree(savedRoot);
+      // 更新标题 + 显示关闭按钮
+      const title = document.getElementById('file-tree-title');
+      if (title) title.textContent = savedRoot.split(/[\\/]/).pop() || savedRoot;
+      const closeBtn = document.getElementById('close-workspace-btn');
+      if (closeBtn) closeBtn.style.display = '';
     }
 
     // ========== V0.13: AI 大模型对话（多 Provider，OpenAI 协议 + Ollama 协议） ==========
