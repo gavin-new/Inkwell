@@ -34,8 +34,8 @@ public sealed class MainForm : Form
     private static readonly string WwwRoot = Path.Combine(AppDataDir, "wwwroot");
 
     // 资源版本号：版本变化时强制重新释放
-    // V0.11a: 升级到 10（AI 按钮平铺：润色/翻译/续写/总结 4 个直按钮）
-    private const string ResourcesVersion = "10";
+    // V0.11a: 升级到 11（修复 ListDirectory 单参数 args 类型不匹配）
+    private const string ResourcesVersion = "11";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

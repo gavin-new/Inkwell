@@ -386,7 +386,12 @@ internal sealed class ApiBridge
     /// </summary>
     private object ListDirectory(JsonElement args)
     {
-        string rootPath = args[0].GetString() ?? throw new ArgumentException("path required");
+        // 兼容两种调用：bridge.call('listDirectory', path) → args 是 String
+        // 旧调用：bridge.call('listDirectory', [path]) → args 是 Array (length 1)
+        string rootPath = args.ValueKind == JsonValueKind.String
+            ? args.GetString() ?? ""
+            : (args.GetArrayLength() > 0 ? args[0].GetString() ?? "" : "");
+        if (string.IsNullOrEmpty(rootPath)) throw new ArgumentException("path required");
         if (!Directory.Exists(rootPath)) throw new DirectoryNotFoundException("目录不存在");
 
         var tree = BuildDirTree(rootPath, maxDepth: 8);
