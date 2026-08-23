@@ -1693,15 +1693,10 @@
         <button onclick="openFindModal()" data-i18n-title="find" title="查找替换 Ctrl+F"><svg class="icon"><use href="#icon-search"></use></svg> <span data-i18n="find">查找</span></button>
         <button onclick="openMermaidModal()" data-i18n-title="mermaid" title="插入 Mermaid 图表"><svg class="icon"><use href="#icon-mermaid"></use></svg> <span data-i18n="mermaid">Mermaid</span></button>
         <span class="divider"></span>
-        <div class="dropdown" id="ai-edit-dropdown">
-          <button onclick="toggleAiEditMenu()" data-i18n-title="aiEdit" title="AI 编辑（先选中文本）" class="ai-edit-btn"><svg class="icon"><use href="#icon-sparkle"></use></svg> <span data-i18n="aiEdit">AI</span> <svg class="icon icon-sm"><use href="#icon-chevron-down"></use></svg></button>
-          <div class="dropdown-menu" id="ai-edit-menu">
-            <div class="dropdown-item" onclick="aiProcessSelection('polish'); closeAiEditMenu();" data-i18n="aiPolish">✨ 润色选区</div>
-            <div class="dropdown-item" onclick="aiProcessSelection('translate'); closeAiEditMenu();" data-i18n="aiTranslate">🌐 翻译（中↔英）</div>
-            <div class="dropdown-item" onclick="aiProcessSelection('continue'); closeAiEditMenu();" data-i18n="aiContinue">📝 续写</div>
-            <div class="dropdown-item" onclick="aiProcessSelection('summarize'); closeAiEditMenu();" data-i18n="aiSummarize">📋 总结</div>
-          </div>
-        </div>
+        <button onclick="aiProcessSelection('polish')" data-i18n-title="aiPolish" title="✨ 润色选区（先选中文本）" data-mode="polish" class="ai-edit-btn"><svg class="icon"><use href="#icon-sparkle"></use></svg></button>
+        <button onclick="aiProcessSelection('translate')" data-i18n-title="aiTranslate" title="🌐 翻译（中↔英，先选中文本）" data-mode="translate" class="ai-edit-btn"><svg class="icon"><use href="#icon-translate"></use></svg></button>
+        <button onclick="aiProcessSelection('continue')" data-i18n-title="aiContinue" title="📝 续写（先选中要接续的文本）" data-mode="continue" class="ai-edit-btn"><svg class="icon"><use href="#icon-pen-line"></use></svg></button>
+        <button onclick="aiProcessSelection('summarize')" data-i18n-title="aiSummarize" title="📋 总结（先选中文本）" data-mode="summarize" class="ai-edit-btn"><svg class="icon"><use href="#icon-compress"></use></svg></button>
       </div>
       <div class="editor-actions">
         <div class="dropdown" id="view-dropdown">
@@ -2780,29 +2775,11 @@
 
     // ========== V0.14: AI 编辑选区（润色 / 翻译 / 续写 / 总结） ==========
     //
-    // 用法：在编辑器（或源码模式）里选中文字 → 工具栏点 "AI" → 选模式
+    // 用法：在编辑器（或源码模式）里选中文字 → 工具栏点对应 AI 按钮
     // → 流式替换选区为 AI 输出。Ctrl+Z 可撤销。
 
     let aiEditBusy = false;
     let aiEditBtn = null;
-
-    function toggleAiEditMenu() {
-      const m = document.getElementById('ai-edit-menu');
-      // 关闭其他 dropdown
-      document.querySelectorAll('.dropdown-menu.show').forEach(el => {
-        if (el !== m) el.classList.remove('show');
-      });
-      m.classList.toggle('show');
-    }
-    function closeAiEditMenu() {
-      const m = document.getElementById('ai-edit-menu');
-      if (m) m.classList.remove('show');
-    }
-    // 复用 closeHeadingMenu / closeViewMenu 的关闭模式
-    document.addEventListener('click', (e) => {
-      const dd = document.getElementById('ai-edit-dropdown');
-      if (dd && !dd.contains(e.target)) closeAiEditMenu();
-    });
 
     // 各模式对应的 system prompt
     const AI_EDIT_PROMPTS = {
@@ -2842,10 +2819,13 @@
 
       // 进入 busy 态
       aiEditBusy = true;
-      aiEditBtn = document.querySelector('.ai-edit-btn');
-      if (aiEditBtn) aiEditBtn.classList.add('busy');
+      // 找到当前模式对应的按钮，加 busy class
+      aiEditBtn = document.querySelector('.ai-edit-btn[data-mode="' + mode + '"]');
       const oldTitle = aiEditBtn ? aiEditBtn.title : '';
-      if (aiEditBtn) aiEditBtn.title = 'AI 处理中…';
+      if (aiEditBtn) {
+        aiEditBtn.classList.add('busy');
+        aiEditBtn.title = 'AI 处理中…';
+      }
 
       // 保存前 AI 状态到历史栈（保证 Ctrl+Z 能回到原始选区）
       pushHistory();
@@ -2881,8 +2861,6 @@
         if (typeof updateCount === 'function') updateCount();
         if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
         if (typeof autoSave === 'function') autoSave();
-        // 推一条历史（让用户可以再 Ctrl+Z 回到 AI 之前）
-        // （其实 pushHistory 已经在开始时推过，结束后没必要再推，否则会重复）
         const modeName = { polish: '润色', translate: '翻译', continue: '续写', summarize: '总结' }[mode] || mode;
         showToast(`AI ${modeName}完成（${result.length} 字）`, 'success');
       } catch (e) {
@@ -2893,7 +2871,7 @@
         aiEditBusy = false;
         if (aiEditBtn) {
           aiEditBtn.classList.remove('busy');
-          aiEditBtn.title = oldTitle || 'AI 编辑（先选中文本）';
+          aiEditBtn.title = oldTitle || ('AI ' + mode);
         }
       }
     }
