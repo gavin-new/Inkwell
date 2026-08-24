@@ -42,7 +42,9 @@ public sealed class MainForm : Form
     // V0.15b: 18（移除「视图」菜单改为全屏按钮；状态栏磁吸卡开关居中并强化样式）
     // V0.15c: 19（列表按钮修复：占位文字按类型显示；有序列表自动编号并延续上一行序号）
     // V0.15d: 20（工具栏移除「无序列表」按钮，保留有序列表与任务列表）
-    private const string ResourcesVersion = "20";
+    // V0.15e: 21（本地图片预览：docs.local 虚拟域映射文档目录，相对路径图片可显示）
+    //         22（改用桥接读取：虚拟主机动态重映射不生效，改 readResource→dataURL 方案）
+    private const string ResourcesVersion = "22";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

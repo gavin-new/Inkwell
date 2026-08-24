@@ -93,6 +93,7 @@ internal sealed class ApiBridge
                 "prompt" => PromptDialog(args),
                 "getInitialFile" => _form.InitialFilePath,
                 "setCurrentFile" => SetCurrentFile(args),
+                "readResource" => ReadResource(args),
                 "getStartupInfo" => GetStartupInfo(),
                 "setTitle" => SetWindowTitle(args),
                 "showInFolder" => ShowInFolder(args),
@@ -694,6 +695,49 @@ internal sealed class ApiBridge
     {
         CurrentFilePath = args.ValueKind == JsonValueKind.String ? args.GetString() : null;
         return new { };
+    }
+
+    /// <summary>
+    /// 读取文档相对资源并转成 dataURL（预览本地图片用）：
+    /// 相对路径依次在「当前 MD 文档目录」「EXE 目录」解析，命中即读盘返回。
+    /// 路径被限制在对应目录内（拒绝 ".." 与盘符），防止逃逸读取任意文件。
+    /// （V0.15e：虚拟主机无法动态重映射，改用桥接读文件方案）
+    /// </summary>
+    private object? ReadResource(JsonElement args)
+    {
+        string rel = args.GetString() ?? "";
+        if (rel.Length == 0 || rel.Contains(':') || rel.Contains(".."))
+            throw new ArgumentException("invalid resource path: " + rel);
+        rel = rel.Replace('/', '\\').TrimStart('\\');
+
+        string? docDir = !string.IsNullOrEmpty(CurrentFilePath)
+            ? Path.GetDirectoryName(CurrentFilePath)
+            : null;
+        string? hit = null;
+        foreach (var root in new[] { docDir, AppContext.BaseDirectory })
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            string fullRoot = Path.GetFullPath(root);
+            string candidate = Path.GetFullPath(Path.Combine(root, rel));
+            if (!candidate.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (File.Exists(candidate)) { hit = candidate; break; }
+        }
+        if (hit is null)
+            throw new FileNotFoundException("resource not found: " + rel);
+
+        string mime = Path.GetExtension(hit).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            ".svg" => "image/svg+xml",
+            _ => "application/octet-stream",
+        };
+        byte[] bytes = File.ReadAllBytes(hit);
+        return new { dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}" };
     }
 
     private object GetStartupInfo()

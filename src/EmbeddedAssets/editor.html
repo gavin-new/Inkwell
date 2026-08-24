@@ -3399,6 +3399,16 @@
       }
 
       preview.innerHTML = '<div class="markdown-body">' + html + '</div>';
+      // V0.15e: 相对路径图片经 C# 桥读取为 dataURL（在文档目录/EXE 目录解析），
+      // 本地图片才能在预览里显示；data:/http(s): 等绝对地址不动
+      if (window.bridge) {
+        preview.querySelectorAll('img').forEach(img => {
+          const src = img.getAttribute('src') || '';
+          if (src && !/^[a-z][a-z0-9+.-]*:/i.test(src)) {
+            applyLocalImage(img, src);
+          }
+        });
+      }
       styleTaskLists();
 
       if (typeof renderMathInElement !== 'undefined') {
@@ -3412,6 +3422,23 @@
       }
 
       renderMermaidBlocks();
+    }
+
+    // 本地相对路径图片 → 经桥接读为 dataURL，带会话级缓存避免每次预览刷新都读盘
+    const localImageCache = new Map();
+    async function applyLocalImage(img, relPath) {
+      if (localImageCache.has(relPath)) {
+        img.src = localImageCache.get(relPath);
+        return;
+      }
+      try {
+        const r = await window.bridge.call('readResource', relPath);
+        if (r && r.dataUrl) {
+          if (localImageCache.size > 60) localImageCache.clear();  // 粗略上限，防止内存膨胀
+          localImageCache.set(relPath, r.dataUrl);
+          img.src = r.dataUrl;
+        }
+      } catch { /* 读取失败保持原样（按原相对地址加载，裂图即裂图） */ }
     }
 
     function protectMath(text) {
