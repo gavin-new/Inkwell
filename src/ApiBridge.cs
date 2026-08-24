@@ -359,12 +359,15 @@ internal sealed class ApiBridge
     }
 
     /// <summary>
-    /// 弹出"选择文件夹"对话框
+    /// 弹出"选择文件夹"对话框。
+    /// 注意：不能在 WebView2 的 WebMessageReceived 回调里直接 ShowDialog ——
+    /// 宿主窗口不会被禁用，对话框会落到主窗口后面（表现为"点了没反应"）。
+    /// 必须用 BeginInvoke 推迟到桥接消息处理结束后再弹，模态关系才能正确建立。
     /// </summary>
     private async Task<object?> ChooseFolder()
     {
         var tcs = new TaskCompletionSource<string?>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
             try
             {
@@ -445,7 +448,8 @@ internal sealed class ApiBridge
     private async Task<string?> PickOpenPath(JsonElement args)
     {
         var tcs = new TaskCompletionSource<string?>();
-        _form.Invoke(() =>
+        // BeginInvoke：不能在 WebMessageReceived 回调内直接弹模态对话框（会掉到主窗口后面）
+        _form.BeginInvoke(() =>
         {
             try
             {
@@ -465,7 +469,7 @@ internal sealed class ApiBridge
     private async Task<string?> PickSavePath(JsonElement args)
     {
         var tcs = new TaskCompletionSource<string?>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
             try
             {
@@ -587,17 +591,21 @@ internal sealed class ApiBridge
 
         // 用 Save As 对话框让用户选位置
         var tcs = new TaskCompletionSource<string?>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
-            using var dlg = new SaveFileDialog
+            try
             {
-                Title = "保存文件",
-                FileName = SanitizeFileName(fileName),
-                Filter = "所有文件|*.*",
-                AddExtension = true,
-                InitialDirectory = baseDir,
-            };
-            tcs.SetResult(dlg.ShowDialog(_form) == DialogResult.OK ? dlg.FileName : null);
+                using var dlg = new SaveFileDialog
+                {
+                    Title = "保存文件",
+                    FileName = SanitizeFileName(fileName),
+                    Filter = "所有文件|*.*",
+                    AddExtension = true,
+                    InitialDirectory = baseDir,
+                };
+                tcs.SetResult(dlg.ShowDialog(_form) == DialogResult.OK ? dlg.FileName : null);
+            }
+            catch (Exception ex) { tcs.SetException(ex); }
         });
 
         string? targetPath = await tcs.Task;

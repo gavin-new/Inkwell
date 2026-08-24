@@ -1,12 +1,12 @@
-# MarkdownEditor 一键构建脚本（PowerShell）
+# Inkwell 一键构建脚本（PowerShell）
 # 要求: .NET 10 SDK
-# 产物: src\bin\Release\net10.0-windows\win-x64\publish\MarkdownEditor.exe
+# 产物: src\bin\Release\net10.0-windows\win-x64\publish\Inkwell.exe
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot\src
 
 Write-Host "===========================================" -ForegroundColor Cyan
-Write-Host " Building MarkdownEditor (Release)" -ForegroundColor Cyan
+Write-Host " Building Inkwell (Release)" -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
 
 dotnet publish -c Release -r win-x64 --nologo
@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$exe = "bin\Release\net10.0-windows\win-x64\publish\MarkdownEditor.exe"
+$exe = "bin\Release\net10.0-windows\win-x64\publish\Inkwell.exe"
 if (Test-Path $exe) {
     $size = (Get-Item $exe).Length
     Write-Host ""
@@ -28,6 +28,6 @@ if (Test-Path $exe) {
     Write-Host "===========================================" -ForegroundColor Green
 
     # 复制到 dist
-    Copy-Item -Path $exe -Destination "..\dist\MarkdownEditor.exe" -Force
-    Write-Host " Copied to dist\MarkdownEditor.exe" -ForegroundColor Green
+    Copy-Item -Path $exe -Destination "..\dist\Inkwell.exe" -Force
+    Write-Host " Copied to dist\Inkwell.exe" -ForegroundColor Green
 }

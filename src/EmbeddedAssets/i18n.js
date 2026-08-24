@@ -3,7 +3,6 @@ const i18n = {
   'zh-CN': {
     // 品牌
     brand: 'Inkwell',
-    brandSubtitle: '简洁优雅的写作工具',
     filenameTitle: '文件名',
     filenameDefault: '未命名文档.md',
     editorPlaceholder: '开始输入 Markdown...',
@@ -14,45 +13,17 @@ const i18n = {
     previewTab: '预览',
     sourceTab: '源码',
 
-    // 菜单（顶栏）
-    menuFile: '文件',
-    menuEdit: '编辑',
-    menuInsert: '插入',
-    menuView: '视图',
-    menuHelp: '帮助',
-    menuFormat: '格式',
-    menuHeading: '标题',
-    menuList: '列表',
-    menuExportAs: '导出为',
-    menuAbout: '关于',
-    menuToggleTheme: '切换主题',
-
     // 文件操作
-    fileNew: '新建文档',
     fileOpen: '打开文件…',
-    fileRecent: '最近文档',
-    fileSave: '保存',
-    fileSaveAs: '另存为…',
-    filePrint: '打印…',
     importBtn: '导入',
     exportBtn: '导出',
     clear: '清空文档',
 
-    // 编辑
-    menuUndo: '撤销',
-    menuRedo: '重做',
-    menuFind: '查找',
-    menuReplace: '替换',
-    menuSelectAll: '全选',
-    menuCut: '剪切',
-    menuCopy: '复制',
-    menuPaste: '粘贴',
-    menuCopyMd: '复制为 Markdown',
-    menuCopyHtml: '复制为 HTML',
-    menuClearFormat: '清除格式',
-
     // 格式
     save: '保存',
+    saveAs: '另存为…',
+    undoTitle: '撤销 Ctrl+Z',
+    redoTitle: '重做 Ctrl+Y / Ctrl+Shift+Z',
     boldTitle: '加粗',
     italicTitle: '斜体',
     underlineTitle: '下划线',
@@ -69,23 +40,19 @@ const i18n = {
 
     // 标题
     headingH1: '一级标题',
+    heading: '标题',
     headingH2: '二级标题',
     headingH3: '三级标题',
     headingH4: '四级标题',
     headingH5: '五级标题',
     headingH6: '六级标题',
     quote: '引用',
-    unordered: '无序列表',
     ordered: '有序列表',
     task: '任务列表',
+    listItem: '列表项',
 
     // 视图
-    view: '视图',
-    viewBoth: '编辑 + 预览',
-    viewEdit: '仅编辑',
-    viewPreview: '仅预览',
-    pageFullscreen: '页面全屏',
-    systemFullscreen: '系统全屏',
+    fullscreen: '全屏',
     theme: '主题',
 
     // 状态 / 提示
@@ -95,8 +62,6 @@ const i18n = {
     helpTitle: '使用帮助',
     helpOk: '知道了',
     saved: '已保存',
-    autosaveEnabled: '自动保存已启用',
-    statusShortcuts: 'Ctrl+S 保存 · Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+U 下划线 · Ctrl+Z 撤销 · Ctrl+Y 重做',
 
     // 导出
     exportMd: 'Markdown (.md)',
@@ -155,6 +120,11 @@ const i18n = {
     mermaidCodePlaceholder: 'mindmap\n  root((主题))\n    子主题 A\n    子主题 B',
     mermaidHint: '支持 Mermaid 语法，插入后将在预览区自动渲染。',
 
+    // 状态栏数据
+    statusChars: '{0} 字符',
+    statusSelected: '选中 {0}',
+    statusCursor: '行 {0}',
+    statusLines: '共 {0} 行',
     // 数字
     wordCount: '{0} 字',
     tableSizeLabel: '{0} 行 × {1} 列',
@@ -163,16 +133,11 @@ const i18n = {
 
     // 弹窗
     confirmClear: '确定要清空当前文档吗？此操作不可撤销。',
-    confirmNew: '当前文档有内容，确定要新建文档吗？',
     promptLinkUrl: '输入链接地址：',
     promptLinkDefault: 'https://',
 
     // 按钮提示
     dropMessage: '释放以打开文件或插入图片',
-    expandEditor: '展开编辑区',
-    collapseEditor: '收起编辑区',
-    expandPreview: '展开预览区',
-    collapsePreview: '收起预览区',
 
     // 状态消息
     urlStatusEmptyUrl: '请输入网页地址',
@@ -183,8 +148,6 @@ const i18n = {
     urlStatusPublicFailed: '✗ 所有代理都失败了：{0}',
     statusNoMatch: '未找到匹配项',
     statusFoundMatch: '✓ 已找到',
-    aboutVersion: 'Inkwell Ver 0.11a · 3 列 5 区 + AI 大模型 + AI 编辑选区',
-    aboutDesc: '一款简洁优雅的 Markdown 编辑器，支持实时预览、数学公式、Mermaid 图表，并可将文档导出为 Markdown、HTML、Word、PDF 或图片。支持 HTTP→MD 网页转换、25+ 文本格式、多厂商 AI 对话（OpenAI / DeepSeek / 智谱 / 通义 / Kimi / Ollama）。',
 
     // V0.11: 文件树 + 大纲
     fileTree: '文件',
@@ -193,7 +156,6 @@ const i18n = {
     openFolder: '打开文件夹',
     closeWorkspace: '关闭工作区',
     collapsePane: '折叠面板',
-    currentFile: '当前文件',
     outline: '大纲',
     outlineEmpty: '输入标题（# 开头）后自动生成',
 
@@ -201,7 +163,6 @@ const i18n = {
     aiPaneTitle: 'AI 大模型',
     aiDisconnected: '未配置',
     aiConnected: '已配置',
-    aiError: '连接失败',
     aiSelectModel: '选择模型',
     aiModels: '个模型',
     aiChatEmpty: '输入内容与 AI 模型对话（润色 / 翻译 / 续写）',
@@ -228,7 +189,6 @@ const i18n = {
     aiSystemPromptPlaceholder: '你是一位严谨的写作助手，擅长中英文翻译、润色和续写。',
     aiCustomHeaders: '自定义请求头（JSON，可选）',
     aiCustomHeadersPlaceholder: '{"X-Custom-Header": "value"}',
-    aiCustomHeadersHint: '高级选项，标准 JSON 格式。用于需要特殊 Header 的代理服务。',
     aiTestBtn: '测试连接',
     aiReset: '恢复默认',
     aiConfigSaved: '已保存配置',
@@ -238,7 +198,6 @@ const i18n = {
     aiConfigFileHint: '改动后立即保存到该路径。可用任意编辑器直接修改（JSON 格式）。',
 
     // V0.14: AI 编辑选区（润色 / 翻译 / 续写 / 总结）
-    aiEdit: 'AI',
     aiPolish: '✨ 润色选区',
     aiTranslate: '🌐 翻译（中↔英）',
     aiContinue: '📝 续写',
@@ -246,24 +205,11 @@ const i18n = {
 
     // 通知
     toastSaved: '✓ 已保存',
-    toastNewDoc: '已新建文档',
     toastExported: '已导出',
     toastWordExported: '已导出 Word',
     toastHtmlExported: '已导出 HTML',
-    toastCopied: '已复制',
-    toastCut: '已剪切',
-    toastMdCopied: '已复制 Markdown 源码',
-    toastHtmlCopied: '已复制 HTML 源码',
-    toastClipboardEmpty: '剪贴板为空',
-    toastSelectFirst: '请先选中要清除格式的内容',
-    confirm: '确认',
-    input: '输入',
-    fileRecent: '最近文档',
-    fileRecentEmpty: '暂无最近文档',
     toastUndone: '已撤销',
     toastRedone: '已重做',
-    toastPageFullscreenOn: '已进入页面全屏',
-    toastPageFullscreenOff: '已退出页面全屏',
     toastNoFullscreenApi: '当前浏览器不支持系统全屏 API',
     toastFileImported: '已打开文件',
     toastImageInserted: '已插入图片',
@@ -367,8 +313,8 @@ mindmap
       <p><b>快速上手</b></p>
       <ul>
         <li>在左侧输入 Markdown，右侧同步渲染。</li>
-        <li>使用顶部菜单（文件 / 编辑 / 插入 / 视图 / 帮助）完成所有操作。</li>
-        <li>在编辑区<strong>右键</strong>可呼出快捷菜单，剪贴板、格式操作一应俱全。</li>
+        <li>状态栏中间的 📁 📑 👁 🤖 按钮可显示 / 隐藏文件树、大纲、预览、AI 四张卡片，卡片挪走后编辑区自动扩展。</li>
+        <li>选中文字点工具栏按钮（或 AI 按钮）可快速包裹、替换选区。</li>
       </ul>
       <p><b>常用快捷键</b>：<code>Ctrl+S</code> 保存，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y</code> 重做。</p>
       <p><b>AI 大模型</b>：右下角面板可与 OpenAI / DeepSeek / 智谱 GLM / 通义千问 / Kimi / 本地 Ollama 等多家厂商对话。点击齿轮按钮配置 API Key 和模型名。</p>
@@ -378,7 +324,6 @@ mindmap
 
   'en': {
     brand: 'Inkwell',
-    brandSubtitle: 'A clean writing tool',
     filenameTitle: 'Filename',
     filenameDefault: 'untitled.md',
     editorPlaceholder: 'Start typing Markdown...',
@@ -398,11 +343,9 @@ mindmap
     collapsePane: 'Collapse pane',
     outline: 'Outline',
     outlineEmpty: 'Type # headings to generate outline',
-    currentFile: 'Current file',
     aiPaneTitle: 'AI Chat',
     aiDisconnected: 'Not configured',
     aiConnected: 'Configured',
-    aiError: 'Connection failed',
     aiSelectModel: 'Select model',
     aiModels: 'models',
     aiChatEmpty: 'Chat with AI to polish / translate / continue your text',
@@ -429,7 +372,6 @@ mindmap
     aiSystemPromptPlaceholder: 'You are a rigorous writing assistant, skilled in translation, polishing and continuation.',
     aiCustomHeaders: 'Custom Headers (JSON, optional)',
     aiCustomHeadersPlaceholder: '{"X-Custom-Header": "value"}',
-    aiCustomHeadersHint: 'Advanced. Standard JSON. Use for proxy services requiring special headers.',
     aiTestBtn: 'Test connection',
     aiReset: 'Reset to defaults',
     aiConfigSaved: 'Configuration saved',
@@ -439,47 +381,20 @@ mindmap
     aiConfigFileHint: 'Saved to this path on every change. You can also edit the JSON directly with any editor.',
 
     // V0.14: AI Edit Selection (polish / translate / continue / summarize)
-    aiEdit: 'AI',
     aiPolish: '✨ Polish selection',
     aiTranslate: '🌐 Translate (ZH↔EN)',
     aiContinue: '📝 Continue writing',
     aiSummarize: '📋 Summarize',
 
-    menuFile: 'File',
-    menuEdit: 'Edit',
-    menuInsert: 'Insert',
-    menuView: 'View',
-    menuHelp: 'Help',
-    menuFormat: 'Format',
-    menuHeading: 'Heading',
-    menuList: 'List',
-    menuExportAs: 'Export as',
-    menuAbout: 'About',
-    menuToggleTheme: 'Toggle theme',
-
-    fileNew: 'New',
     fileOpen: 'Open file…',
-    fileRecent: 'Recent',
-    fileSave: 'Save',
-    fileSaveAs: 'Save as…',
-    filePrint: 'Print…',
     importBtn: 'Import',
     exportBtn: 'Export',
     clear: 'Clear',
 
-    menuUndo: 'Undo',
-    menuRedo: 'Redo',
-    menuFind: 'Find',
-    menuReplace: 'Replace',
-    menuSelectAll: 'Select all',
-    menuCut: 'Cut',
-    menuCopy: 'Copy',
-    menuPaste: 'Paste',
-    menuCopyMd: 'Copy as Markdown',
-    menuCopyHtml: 'Copy as HTML',
-    menuClearFormat: 'Clear formatting',
-
     save: 'Save',
+    saveAs: 'Save as…',
+    undoTitle: 'Undo Ctrl+Z',
+    redoTitle: 'Redo Ctrl+Y / Ctrl+Shift+Z',
     boldTitle: 'Bold',
     italicTitle: 'Italic',
     underlineTitle: 'Underline',
@@ -495,22 +410,18 @@ mindmap
     mermaid: 'Mermaid',
 
     headingH1: 'Heading 1',
+    heading: 'Heading',
     headingH2: 'Heading 2',
     headingH3: 'Heading 3',
     headingH4: 'Heading 4',
     headingH5: 'Heading 5',
     headingH6: 'Heading 6',
     quote: 'Quote',
-    unordered: 'Bulleted list',
     ordered: 'Numbered list',
     task: 'Task list',
+    listItem: 'List item',
 
-    view: 'View',
-    viewBoth: 'Editor + Preview',
-    viewEdit: 'Editor only',
-    viewPreview: 'Preview only',
-    pageFullscreen: 'Page fullscreen',
-    systemFullscreen: 'System fullscreen',
+    fullscreen: 'Fullscreen',
     theme: 'Theme',
 
     langLabel: 'Language',
@@ -519,8 +430,6 @@ mindmap
     helpTitle: 'Help',
     helpOk: 'Got it',
     saved: 'Saved',
-    autosaveEnabled: 'Auto-save enabled',
-    statusShortcuts: 'Ctrl+S Save · Ctrl+B Bold · Ctrl+I Italic · Ctrl+U Underline · Ctrl+Z Undo · Ctrl+Y Redo',
 
     exportMd: 'Markdown (.md)',
     exportWord: 'Word (.doc)',
@@ -577,21 +486,21 @@ mindmap
     mermaidCodePlaceholder: 'mindmap\n  root((Topic))\n    Sub A\n    Sub B',
     mermaidHint: 'Mermaid syntax supported.',
 
+    // Status bar data
+    statusChars: '{0} chars',
+    statusSelected: 'Selected {0}',
+    statusCursor: 'Line {0}',
+    statusLines: '{0} lines',
     wordCount: '{0} chars',
     tableSizeLabel: '{0} rows × {1} cols',
     statusReplacedCount: 'Replaced {0}',
     imageLargeWarning: 'Image is {0}MB. Insert anyway?',
 
     confirmClear: 'Clear the current document? This cannot be undone.',
-    confirmNew: 'Current content will be lost. Create a new document?',
     promptLinkUrl: 'Enter link URL:',
     promptLinkDefault: 'https://',
 
     dropMessage: 'Drop to open file or insert image',
-    expandEditor: 'Expand editor',
-    collapseEditor: 'Collapse editor',
-    expandPreview: 'Expand preview',
-    collapsePreview: 'Collapse preview',
 
     urlStatusEmptyUrl: 'Please enter a URL',
     urlStatusFetching: 'Fetching…',
@@ -601,28 +510,13 @@ mindmap
     urlStatusPublicFailed: '✗ All proxies failed: {0}',
     statusNoMatch: 'No match',
     statusFoundMatch: '✓ Found',
-    aboutVersion: 'Inkwell Ver 0.11a · 3-column 5-zone + AI + AI edit selection',
-    aboutDesc: 'A clean Markdown editor with live preview, math formulas, Mermaid diagrams and multi-format export. Multi-provider AI chat (OpenAI / DeepSeek / Zhipu / Qwen / Kimi / Ollama).',
 
     toastSaved: '✓ Saved',
-    toastNewDoc: 'New document created',
     toastExported: 'Exported',
     toastWordExported: 'Word exported',
     toastHtmlExported: 'HTML exported',
-    toastCopied: 'Copied',
-    toastCut: 'Cut',
-    toastMdCopied: 'Markdown copied',
-    toastHtmlCopied: 'HTML copied',
-    toastClipboardEmpty: 'Clipboard is empty',
-    toastSelectFirst: 'Select content to clear formatting',
-    confirm: 'Confirm',
-    input: 'Input',
-    fileRecent: 'Recent',
-    fileRecentEmpty: 'No recent files',
     toastUndone: 'Undone',
     toastRedone: 'Redone',
-    toastPageFullscreenOn: 'Page fullscreen on',
-    toastPageFullscreenOff: 'Page fullscreen off',
     toastNoFullscreenApi: 'Fullscreen API not supported',
     toastFileImported: 'File opened',
     toastImageInserted: 'Image inserted',
@@ -722,8 +616,8 @@ Press \`Ctrl+S\` to save. Enjoy!`,
       <p><b>Quick start</b></p>
       <ul>
         <li>Type Markdown on the left; the right side renders in real time.</li>
-        <li>Use the top menu (File / Edit / Insert / View / Help) for all actions.</li>
-        <li><strong>Right-click</strong> the editor for a quick context menu (clipboard, formatting, etc.).</li>
+        <li>The 📁 📑 👁 🤖 buttons on the status bar show / hide the file tree, outline, preview and AI cards — the editor expands as cards are tucked away.</li>
+        <li>Select text and click a toolbar (or AI) button to wrap or replace the selection.</li>
       </ul>
       <p><b>Shortcuts</b>: <code>Ctrl+S</code> save, <code>Ctrl+B</code> bold, <code>Ctrl+I</code> italic, <code>Ctrl+U</code> underline, <code>Ctrl+K</code> link, <code>Ctrl+F</code> find, <code>Ctrl+H</code> replace, <code>Ctrl+Z</code> undo, <code>Ctrl+Y</code> redo.</p>
       <p><b>AI</b>: the bottom-right panel supports OpenAI, DeepSeek, Zhipu GLM, Qwen, Kimi, or local Ollama. Click the gear to configure your API key and model.</p>

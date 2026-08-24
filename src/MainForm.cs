@@ -34,8 +34,15 @@ public sealed class MainForm : Form
     private static readonly string WwwRoot = Path.Combine(AppDataDir, "wwwroot");
 
     // 资源版本号：版本变化时强制重新释放
-    // V0.11a: 升级到 12（关闭工作区按钮）
-    private const string ResourcesVersion = "12";
+    // V0.11a: 12（关闭工作区按钮）
+    // V0.15:  16（磁吸卡片布局 + 状态栏统计；13-15 为排查编码损坏的中间版本，
+    //         实际根因是 editor.html 源文件被以 ANSI 误读后重存，与解压无关）
+    // V0.15a: 17（JS 修复：confirm/prompt 异步化后所有调用点补 await；
+    //         下拉菜单 z-index，避免被卡片遮挡）
+    // V0.15b: 18（移除「视图」菜单改为全屏按钮；状态栏磁吸卡开关居中并强化样式）
+    // V0.15c: 19（列表按钮修复：占位文字按类型显示；有序列表自动编号并延续上一行序号）
+    // V0.15d: 20（工具栏移除「无序列表」按钮，保留有序列表与任务列表）
+    private const string ResourcesVersion = "20";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
