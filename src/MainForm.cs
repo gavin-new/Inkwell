@@ -47,7 +47,10 @@ public sealed class MainForm : Form
     // V0.15f: 23（保存流程修复：欢迎文档/清空文档时清掉残留路径，新文档保存必弹另存为；
     //         状态栏左侧显示文档路径，点击可在资源管理器中定位）
     // V0.15g: 24（工具栏分组为可拖动小任务栏 dock；左卡顶端对齐；状态栏图标居左；按钮苹果风格美化）
-    private const string ResourcesVersion = "24";
+    // V0.15h: 25（布局重构：左列与任务栏同顶对齐；撤销组移至任务栏右侧；文件名栏移到右上角）
+    //         26（修复 .pane 的 flex:1 导致左列抢占 workspace 空间）
+    //         27（文件名栏移到按钮组之后的最右上角；左列宽度用高特异性选择器锁定）
+    private const string ResourcesVersion = "27";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

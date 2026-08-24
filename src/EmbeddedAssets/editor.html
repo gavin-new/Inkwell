@@ -310,6 +310,11 @@
       opacity: 0.94;
       cursor: grabbing;
     }
+    /* 撤销/重做组推到任务栏最右侧（V0.15h） */
+    .tool-dock[data-dock="history"] {
+      order: 8;
+      margin-left: auto;
+    }
     /* 拖动把手 */
     .dock-grip {
       display: inline-flex;
@@ -416,13 +421,28 @@
       overflow: hidden;
       position: relative;
     }
-    /* V0.11: 3 列布局（V0.12: 默认右列 400px，编辑区更宽）
-       V0.12: 关键修复 — grid 是 5 列（col + splitter + col + splitter + col），
-       resizer 占据自己的列（10px 固定），不再吃掉 1fr 空间 */
+    /* V0.15h: 工作区 = 左列（文件树/大纲，顶端与任务栏对齐）+ 右侧（任务栏 + 编辑区） */
+    .workspace {
+      flex: 1;
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .right-side {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 编辑区网格：编辑列 | splitter | 右列（左列由 workspace flex 控制） */
     .main.v3col {
       display: grid;
-      grid-template-columns: 240px 10px 1fr 10px 400px;
+      grid-template-columns: 1fr 10px 400px;
       gap: 0;
+      flex: 1;
+      min-height: 0;
     }
     .main.v3col > .pane {
       min-width: 0;
@@ -433,10 +453,14 @@
       position: relative;
     }
     /* V0.15: 左侧上下分割（文件树 / 大纲）— 磁吸卡片风格，与右侧一致
-       V0.15g: 顶端对齐到顶部（去掉上内边距） */
-    .left-pane {
+       V0.15g: 顶端对齐到顶部（去掉上内边距）
+       V0.15h: 移出编辑区网格，成为 workspace 的独立左列。
+               用高特异性覆盖 .pane 的 flex:1（该规则定义在本文件更靠后） */
+    .workspace > .left-pane {
       display: flex;
       flex-direction: column;
+      flex: none;
+      width: 240px;
       min-width: 0;
       min-height: 0;
       padding: 0 6px 10px 10px;
@@ -1655,7 +1679,6 @@
   <div class="app">
     <div class="top-bar">
       <span class="brand" data-i18n="brand">Inkwell</span>
-      <input type="text" id="filename" value="未命名文档.md" data-i18n-title="filenameTitle" title="文件名">
       <div class="spacer"></div>
       <div class="top-actions">
         <button onclick="saveToLocal()" class="primary" data-i18n-title="save"><svg class="icon"><use href="#icon-save"></use></svg> <span data-i18n="save">保存</span></button>
@@ -1692,8 +1715,57 @@
           </div>
         </div>
       </div>
+      <!-- 文件名栏：置于最右上方（V0.15h） -->
+      <input type="text" id="filename" value="未命名文档.md" data-i18n-title="filenameTitle" title="文件名">
     </div>
 
+    <div class="workspace">
+      <!-- 左侧：上 = 文件树 / 下 = 大纲（整列顶端与任务栏顶部对齐，V0.15h） -->
+      <div class="pane left-pane" id="left-pane">
+        <div class="left-pane-top">
+          <div class="pane file-tree-pane" id="file-tree-pane">
+            <div class="pane-header">
+              <button class="pane-action" onclick="openWorkspaceFolder()" data-i18n-title="openFolder" title="打开文件夹">
+                <svg class="icon icon-sm"><use href="#icon-folder"></use></svg>
+              </button>
+              <span class="pane-title" id="file-tree-title" data-i18n="fileTree">文件</span>
+              <button class="pane-action" onclick="refreshFileTree()" data-i18n-title="refresh" title="刷新">
+                <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
+              </button>
+              <button class="pane-action" id="close-workspace-btn" onclick="closeWorkspace()" data-i18n-title="closeWorkspace" title="关闭工作区" style="display:none;">
+                <svg class="icon icon-sm"><use href="#icon-close"></use></svg>
+              </button>
+              <button class="pane-action" id="file-tree-collapse-btn" onclick="toggleCard('fileTree')" data-i18n-title="collapsePane" title="收起文件树卡片" data-pane="fileTree">
+                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-up"></use></svg>
+              </button>
+            </div>
+            <div class="file-tree" id="file-tree">
+              <div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>
+            </div>
+          </div>
+        </div>
+        <div class="resizer-h" id="resizer-tree-outline" title="拖动调整上下区域比例"></div>
+        <div class="left-pane-bottom">
+          <div class="pane outline-pane" id="outline-pane">
+            <div class="pane-header">
+              <span class="pane-title" data-i18n="outline">大纲</span>
+              <button class="pane-action" onclick="refreshOutline()" data-i18n-title="refresh" title="刷新大纲">
+                <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
+              </button>
+              <button class="pane-action" id="outline-collapse-btn" onclick="toggleCard('outline')" data-i18n-title="collapsePane" title="收起大纲卡片" data-pane="outline">
+                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-down"></use></svg>
+              </button>
+            </div>
+            <div class="outline-list" id="outline-list">
+              <div class="outline-empty" data-i18n="outlineEmpty">输入标题（# 开头）后自动生成大纲</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="resizer" id="resizer-tree" title="拖动调整左侧宽度"></div>
+
+      <div class="right-side">
     <!-- V0.15g: 工具按钮按用途分组为可拖动的小任务栏（拖左侧把手可浮起，双击复位） -->
     <div class="tool-docks" id="tool-docks">
       <div class="tool-dock" data-dock="history">
@@ -1758,51 +1830,6 @@
     </div>
 
     <div class="main v3col">
-      <!-- 左侧：上 = 文件树 / 下 = 大纲 -->
-      <div class="pane left-pane" id="left-pane">
-        <div class="left-pane-top">
-          <div class="pane file-tree-pane" id="file-tree-pane">
-            <div class="pane-header">
-              <button class="pane-action" onclick="openWorkspaceFolder()" data-i18n-title="openFolder" title="打开文件夹">
-                <svg class="icon icon-sm"><use href="#icon-folder"></use></svg>
-              </button>
-              <span class="pane-title" id="file-tree-title" data-i18n="fileTree">文件</span>
-              <button class="pane-action" onclick="refreshFileTree()" data-i18n-title="refresh" title="刷新">
-                <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
-              </button>
-              <button class="pane-action" id="close-workspace-btn" onclick="closeWorkspace()" data-i18n-title="closeWorkspace" title="关闭工作区" style="display:none;">
-                <svg class="icon icon-sm"><use href="#icon-close"></use></svg>
-              </button>
-              <button class="pane-action" id="file-tree-collapse-btn" onclick="toggleCard('fileTree')" data-i18n-title="collapsePane" title="收起文件树卡片" data-pane="fileTree">
-                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-up"></use></svg>
-              </button>
-            </div>
-            <div class="file-tree" id="file-tree">
-              <div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>
-            </div>
-          </div>
-        </div>
-        <div class="resizer-h" id="resizer-tree-outline" title="拖动调整上下区域比例"></div>
-        <div class="left-pane-bottom">
-          <div class="pane outline-pane" id="outline-pane">
-            <div class="pane-header">
-              <span class="pane-title" data-i18n="outline">大纲</span>
-              <button class="pane-action" onclick="refreshOutline()" data-i18n-title="refresh" title="刷新大纲">
-                <svg class="icon icon-sm"><use href="#icon-refresh"></use></svg>
-              </button>
-              <button class="pane-action" id="outline-collapse-btn" onclick="toggleCard('outline')" data-i18n-title="collapsePane" title="收起大纲卡片" data-pane="outline">
-                <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-down"></use></svg>
-              </button>
-            </div>
-            <div class="outline-list" id="outline-list">
-              <div class="outline-empty" data-i18n="outlineEmpty">输入标题（# 开头）后自动生成大纲</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="resizer" id="resizer-tree" title="拖动调整左侧宽度"></div>
-
       <!-- 中间：编辑区 -->
       <div class="pane editor-pane" id="editor-pane">
         <div class="pane-header">
@@ -1861,6 +1888,8 @@
         </div>
       </div>
     </div>
+      </div><!-- /right-side -->
+    </div><!-- /workspace -->
 
     <div class="statusbar">
       <!-- 左：4 张磁吸卡片显隐开关（依次排列在最左侧） -->
@@ -3260,19 +3289,22 @@
     })();
 
     function applySplit() {
-      // v3col 是 5 列 grid（col | splitter | col | splitter | col）
-      // 某侧整列收起时，对应列宽与 splitter 归零，编辑区吃满剩余空间
-      const main = document.querySelector('.main.v3col');
-      if (!main) return;
+      // V0.15h: 左列宽度走 workspace flex；编辑区 grid 为 3 列（1fr | splitter | 右列）。
+      // 某侧整列收起时，对应宽度与 splitter 归零
       const lw = Math.max(160, Math.min(600, leftWidth));
       const rw = Math.max(280, Math.min(800, rightWidth));
       const leftHidden  = document.querySelector('.left-pane.col-hidden')  != null;
       const rightHidden = document.querySelector('.right-pane.col-hidden') != null;
-      const colL = leftHidden  ? '0' : `${lw}px`;
-      const splL = leftHidden  ? '0' : '10px';
-      const colR = rightHidden ? '0' : `${rw}px`;
-      const splR = rightHidden ? '0' : '10px';
-      main.style.gridTemplateColumns = `${colL} ${splL} 1fr ${splR} ${colR}`;
+      const leftPane = document.querySelector('.left-pane');
+      if (leftPane) leftPane.style.width = leftHidden ? '0px' : lw + 'px';
+      const leftResizer = document.getElementById('resizer-tree');
+      if (leftResizer) leftResizer.style.display = leftHidden ? 'none' : '';
+      const grid = document.querySelector('.main.v3col');
+      if (grid) {
+        const spl = rightHidden ? '0' : '10px';
+        const colR = rightHidden ? '0' : rw + 'px';
+        grid.style.gridTemplateColumns = `1fr ${spl} ${colR}`;
+      }
       leftWidth = lw;
       rightWidth = rw;
     }
