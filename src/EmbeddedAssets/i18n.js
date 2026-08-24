@@ -128,6 +128,7 @@ const i18n = {
     pathUnsaved: '未保存',
     pathUnsavedTip: '尚未保存到磁盘，点「保存」选择位置',
     pathRevealHint: '点击在资源管理器中定位',
+    dockGripTip: '拖动移动 · 双击复位',
     // 数字
     wordCount: '{0} 字',
     tableSizeLabel: '{0} 行 × {1} 列',
@@ -497,6 +498,7 @@ mindmap
     pathUnsaved: 'Unsaved',
     pathUnsavedTip: 'Not saved to disk yet — click Save to pick a location',
     pathRevealHint: 'Click to reveal in File Explorer',
+    dockGripTip: 'Drag to move · double-click to reset',
     wordCount: '{0} chars',
     tableSizeLabel: '{0} rows × {1} cols',
     statusReplacedCount: 'Replaced {0}',

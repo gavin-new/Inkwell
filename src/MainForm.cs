@@ -46,7 +46,8 @@ public sealed class MainForm : Form
     //         22（改用桥接读取：虚拟主机动态重映射不生效，改 readResource→dataURL 方案）
     // V0.15f: 23（保存流程修复：欢迎文档/清空文档时清掉残留路径，新文档保存必弹另存为；
     //         状态栏左侧显示文档路径，点击可在资源管理器中定位）
-    private const string ResourcesVersion = "23";
+    // V0.15g: 24（工具栏分组为可拖动小任务栏 dock；左卡顶端对齐；状态栏图标居左；按钮苹果风格美化）
+    private const string ResourcesVersion = "24";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
