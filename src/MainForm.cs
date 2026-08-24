@@ -44,7 +44,9 @@ public sealed class MainForm : Form
     // V0.15d: 20（工具栏移除「无序列表」按钮，保留有序列表与任务列表）
     // V0.15e: 21（本地图片预览：docs.local 虚拟域映射文档目录，相对路径图片可显示）
     //         22（改用桥接读取：虚拟主机动态重映射不生效，改 readResource→dataURL 方案）
-    private const string ResourcesVersion = "22";
+    // V0.15f: 23（保存流程修复：欢迎文档/清空文档时清掉残留路径，新文档保存必弹另存为；
+    //         状态栏左侧显示文档路径，点击可在资源管理器中定位）
+    private const string ResourcesVersion = "23";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

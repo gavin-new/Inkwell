@@ -1055,6 +1055,22 @@
     }
     .statusbar .save-hint { color: var(--accent); opacity: 0; transition: opacity .3s var(--ease); font-weight: 500; }
     .statusbar .save-hint.show { opacity: 1; }
+    /* 左：文档路径，超长省略，点击在资源管理器中定位 */
+    .statusbar-path {
+      grid-column: 1;
+      justify-self: start;
+      max-width: 34vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.7;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .statusbar-path:hover {
+      opacity: 1;
+      color: var(--text);
+    }
     /* 中间：磁吸卡开关 */
     .statusbar-cards {
       grid-column: 2;
@@ -1791,6 +1807,8 @@
     </div>
 
     <div class="statusbar">
+      <!-- 左：当前文档路径（点击在资源管理器中定位文件） -->
+      <div class="statusbar-path" id="status-path" onclick="revealCurrentFile()">未保存</div>
       <!-- 中间：4 张磁吸卡片显隐开关（真正的水平居中） -->
       <div class="statusbar-cards" id="statusbar-cards">
         <span class="status-card" data-card="fileTree" onclick="toggleCard('fileTree')" data-i18n-title="fileTree" title="文件">📁</span>
@@ -2159,12 +2177,32 @@
       }
 
       updateStatusBar();
+      updatePathDisplay();
       updateCount();
     }
 
     function updateStatusBar() {
       // V0.15: 左侧磁吸卡开关为静态图标，右侧数据由 updateEditorStats 维护
       if (saveHint) saveHint.textContent = '✓ ' + t('saved');
+    }
+
+    // V0.15f: 状态栏左侧显示当前文档路径；点击在资源管理器中定位
+    function updatePathDisplay() {
+      const el = document.getElementById('status-path');
+      if (!el) return;
+      if (currentFilePath) {
+        el.textContent = currentFilePath;
+        el.title = currentFilePath + '\n' + t('pathRevealHint');
+      } else {
+        el.textContent = t('pathUnsaved');
+        el.title = t('pathUnsavedTip');
+      }
+    }
+
+    function revealCurrentFile() {
+      if (currentFilePath && window.bridge) {
+        window.bridge.call('showInFolder', currentFilePath).catch(() => {});
+      }
     }
 
     function toggleLangMenu() {
@@ -2380,6 +2418,7 @@
           currentFilePath = result.path;
           currentFileEncoding = result.encoding || 'utf-8';
           currentFileLineEnding = result.lineEnding || 'lf';
+          updatePathDisplay();
           currentFileHasFinalNewline = result.hasFinalNewline !== false;
           const ext = (fileName.split('.').pop() || '').toLowerCase();
           currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
@@ -3316,11 +3355,15 @@
         if (isValidSaved) {
           editor.value = saved;
         } else {
-          // localStorage 里的内容不可信（空 / 残片 / 损坏），清掉并加载欢迎文档
+          // localStorage 里的内容不可信（空 / 残片 / 损坏），清掉并加载欢迎文档。
+          // 关键：残留的旧文件路径也要一并清掉，否则编辑欢迎文档后点「保存」
+          // 会不弹对话框直接静默覆盖旧文件（V0.15f 修复）
           if (localStorage.getItem(STORAGE_KEY) !== null) {
             try { localStorage.removeItem(STORAGE_KEY); } catch {}
             try { localStorage.removeItem(FILENAME_KEY); } catch {}
           }
+          try { localStorage.removeItem(FILEPATH_KEY); } catch {}
+          currentFilePath = null;
           editor.value = i18n[currentLang].welcomeDoc;
           filenameInput.value = t('filenameDefault');
         }
@@ -3359,6 +3402,8 @@
       tryRun('language', () => applyLanguage());
       // 状态栏统计
       tryRun('editorStats', () => updateEditorStats());
+      // 状态栏路径
+      tryRun('path', () => updatePathDisplay());
       // 初次渲染大纲（最后一步，必须执行）
       tryRun('outline', () => refreshOutline());
 
@@ -3608,6 +3653,7 @@
           // 同步文件名输入框
           const fileName = result.path.split(/[\\/]/).pop();
           if (fileName) filenameInput.value = fileName;
+          updatePathDisplay();
           // 更新文件格式
           const ext = (fileName.split('.').pop() || '').toLowerCase();
           currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
@@ -3638,6 +3684,7 @@
           currentFilePath = result.path;
           currentFileEncoding = result.encoding || 'utf-8';
           currentFileLineEnding = result.lineEnding || 'lf';
+          updatePathDisplay();
           currentFileHasFinalNewline = result.hasFinalNewline !== false;
           // 标记文件格式
           const ext = (fileName.split('.').pop() || '').toLowerCase();
@@ -4131,15 +4178,18 @@ ${'</scr' + 'ipt>'}
       updatePreview();
     }
 
-    // 清空文档
+    // 清空文档 = 开始一篇新文档：解除与旧文件的关联，
+    // 下次点「保存」会重新弹「另存为」选路径（V0.15f）
     async function clearDoc() {
       // bridge.js 把 confirm 重写成了异步（Promise），必须 await 才能拿到用户点击结果
       if (await confirm(t('confirmClear'))) {
         editor.value = '';
+        currentFilePath = null;
+        try { localStorage.removeItem(FILEPATH_KEY); } catch {}
+        updatePathDisplay();
         updatePreview();
         updateCount();
-        updateEditorStats();
-        saveToLocal();
+        autoSave();   // 只写本地缓存，不触发磁盘保存/另存为
       }
     }
 
