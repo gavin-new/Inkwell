@@ -1,6 +1,6 @@
 // =============================================================================
 //  Inkwell — A single-file Markdown editor for Windows
-//  Version: Ver 0.11a (first public release)
+//  Version: v0.15
 //  Original release: Ver 0.10
 //  Author:  Gavin (gavin.zhang815@gmail.com)
 //  License: MIT — see LICENSE in the repository root

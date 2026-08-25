@@ -1,6 +1,6 @@
 // =============================================================================
 //  Inkwell — A single-file Markdown editor for Windows
-//  Version: Ver 0.11a (first public release)
+//  Version: v0.15
 //  Original release: Ver 0.10
 //  Author:  Gavin (gavin.zhang815@gmail.com)
 //  License: MIT — see LICENSE in the repository root
@@ -26,6 +26,8 @@ public sealed class MainForm : Form
     public string? InitialFilePath { get; }
 
     private const string VirtualHost = "app.local";
+    // 产品版本号：窗口标题与 about 显示（改这里即可全局同步）
+    public const string ProductVersion = "v0.15";
     // V0.12: wwwroot 放到 %LocalAppData%\Inkwell\wwwroot（不污染 EXE 所在目录，
     //        避免绿色版 / 便携版用户在桌面上看到一堆解压文件）
     private static readonly string AppDataDir = Path.Combine(
@@ -65,7 +67,7 @@ public sealed class MainForm : Form
     {
         InitialFilePath = initialFile;
 
-        Text = "Inkwell Ver 0.11a";
+        Text = $"Inkwell {ProductVersion}";
         Width = 1280;
         Height = 800;
         MinimumSize = new Size(720, 480);
@@ -247,7 +249,7 @@ public sealed class MainForm : Form
     public void SetWindowTitle(string? fileName = null)
     {
         if (string.IsNullOrEmpty(fileName))
-            Invoke(() => Text = "Inkwell Ver 0.11a");
+            Invoke(() => Text = $"Inkwell {ProductVersion}");
         else
             Invoke(() => Text = $"{Path.GetFileName(fileName)} - Inkwell");
     }
