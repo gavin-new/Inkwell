@@ -1865,6 +1865,8 @@
             <svg class="icon icon-sm"><use href="#icon-braces"></use></svg>
           </button>
         </div>
+        <!-- V0.16: 多文件 tab 栏（关闭/切换/dirty 跟踪） -->
+        <div class="editor-tabs" id="editor-tabs"></div>
         <textarea id="editor" data-i18n-placeholder="editorPlaceholder" placeholder="开始输入 Markdown..." spellcheck="false"></textarea>
       </div>
 
@@ -2250,6 +2252,16 @@
     const PREVIEW_MODE_KEY = 'md_editor_preview_mode';
     const LANG_KEY = 'md_editor_language';
     const CARDS_VISIBLE_KEY = 'md_editor_cards_visible';
+    // V0.16: 多 tab + 多根工作区
+    const OPEN_TABS_KEY = 'inkwell_open_tabs';
+    const ACTIVE_TAB_KEY = 'inkwell_active_tab';
+    const WORKSPACE_ROOTS_KEY = 'inkwell_workspace_roots';
+    // openTabs: Map<path, {fileName, content, format, encoding, lineEnding, hasFinalNewline, docxBase64, dirty, lastSavedContent}>
+    const openTabs = new Map();
+    let tabOrder = [];   // 显示顺序
+    let activeTabPath = null;
+    // workspaceRoots: [{path, name}] — VS Code 风格多根工作区
+    let workspaceRoots = [];
 
     let previewMode = 'preview';
     let currentLang = 'zh-CN';
@@ -2356,81 +2368,210 @@
     let lastHistoryText = null;
     let historyTimer = null;
 
-    // ========== V0.11: 文件树 ==========
-    let currentWorkspaceRoot = null;
+    // ========== V0.11: 文件树（V0.16: 多根工作区） ==========
+    let currentWorkspaceRoot = null;  // V0.16 兼容老代码（始终等于 workspaceRoots[0]?.path 或 null）
     let activeFilePath = null;
 
+    // V0.16: 添加根目录（多次调用叠加，不覆盖）
     async function openWorkspaceFolder() {
       if (!window.bridge) {
         showToast('当前环境不支持打开文件夹', 'error');
         return;
       }
-      // 用 OpenFileDialog 选文件夹（Windows 没有原生 FolderBrowserDialog in bridge，
-      // 用 GetDirectoryPathViaSaveDialog 作为 workaround）
-      // 实际方案：让用户先打开文件夹里的任意一个文件
-      // 或者：新增 chooseFolder API
       try {
         const folder = await window.bridge.call('chooseFolder');
-        if (folder) {
-          currentWorkspaceRoot = folder;
-          localStorage.setItem('inkwell_workspace_root', folder);
-          await loadFileTree(folder);
-          document.getElementById('file-tree-title').textContent = folder.split(/[\\/]/).pop() || folder;
-          // 显示关闭按钮
-          const closeBtn = document.getElementById('close-workspace-btn');
-          if (closeBtn) closeBtn.style.display = '';
+        if (!folder) return;
+        // 重复检查
+        if (workspaceRoots.some(r => r.path === folder)) {
+          showToast('该目录已在工作区中');
+          return;
         }
+        workspaceRoots.push({ path: folder, name: folder.split(/[\\/]/).pop() || folder });
+        saveWorkspaceRootsToStorage();
+        await loadFileTreeForRoot(workspaceRoots.length - 1);
+        // 显示关闭按钮（至少有一个根）
+        const closeBtn = document.getElementById('close-workspace-btn');
+        if (closeBtn) closeBtn.style.display = '';
+        showToast('已添加工作区: ' + folder);
       } catch (e) {
         showToast('打开文件夹失败: ' + e.message, 'error');
       }
     }
 
-    // 关闭工作区：清掉当前根目录 + 缓存的 lastPath
-    // 不影响当前打开的编辑器内容（用户可以继续编辑）
+    // V0.16: 移除单个根目录（兼容旧的 closeWorkspace：移除所有）
     async function closeWorkspace() {
-      if (!currentWorkspaceRoot) {
+      if (!workspaceRoots.length) {
         showToast('当前没有打开工作区', 'info');
         return;
       }
-      // bridge.js 把 confirm 重写成了异步（Promise），必须 await 才能拿到用户点击结果
-      const ok = await confirm('关闭工作区？\n\n当前打开的文件夹会从左侧文件树移除（不影响已打开的文档）。');
-      if (!ok) return;
-      currentWorkspaceRoot = null;
-      activeFilePath = null;
-      try { localStorage.removeItem('inkwell_workspace_root'); } catch {}
-      try { localStorage.removeItem('inkwell_last_path'); } catch {}
-      // 重置文件树 UI
-      const container = document.getElementById('file-tree');
-      if (container) {
-        container.innerHTML = '<div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>';
+      // 如果只有一个根，按旧行为：清掉所有
+      // 多个根：弹选择（这里简化为清掉最后一个）
+      if (workspaceRoots.length === 1) {
+        const ok = await confirm('关闭工作区？\n\n当前打开的文件夹会从左侧文件树移除（不影响已打开的文档）。');
+        if (!ok) return;
+        removeWorkspaceRoot(0);
+        showToast('已关闭工作区', 'success');
+      } else {
+        // 多个根：弹"移除哪个"
+        const names = workspaceRoots.map((r, i) => `${i + 1}. ${r.name}`).join('\n');
+        const choice = await prompt(`多个工作区，移除哪个？\n\n${names}\n\n输入编号移除（留空关闭提示）`, '');
+        if (!choice) return;
+        const idx = parseInt(choice.trim(), 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= workspaceRoots.length) {
+          showToast('无效编号', 'error');
+          return;
+        }
+        const name = workspaceRoots[idx].name;
+        removeWorkspaceRoot(idx);
+        showToast(`已移除工作区: ${name}`);
       }
-      const title = document.getElementById('file-tree-title');
-      if (title) title.textContent = (window.t ? t('fileTree') : '文件');
-      // 隐藏关闭按钮
-      const closeBtn = document.getElementById('close-workspace-btn');
-      if (closeBtn) closeBtn.style.display = 'none';
-      showToast('已关闭工作区', 'success');
     }
 
-    async function refreshFileTree() {
-      if (currentWorkspaceRoot) await loadFileTree(currentWorkspaceRoot);
-    }
-
-    async function loadFileTree(rootPath) {
+    // V0.16: 移除指定索引的根 + 重渲染文件树
+    function removeWorkspaceRoot(index) {
+      workspaceRoots.splice(index, 1);
+      saveWorkspaceRootsToStorage();
       const container = document.getElementById('file-tree');
-      container.innerHTML = '<div class="file-tree-empty">加载中…</div>';
+      if (workspaceRoots.length === 0) {
+        if (container) {
+          container.innerHTML = '<div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>';
+        }
+        currentWorkspaceRoot = null;
+        const closeBtn = document.getElementById('close-workspace-btn');
+        if (closeBtn) closeBtn.style.display = 'none';
+      } else {
+        currentWorkspaceRoot = workspaceRoots[0].path;
+        renderFileTree();
+      }
+    }
+
+    // V0.16: 刷新所有根目录
+    async function refreshFileTree() {
+      for (let i = 0; i < workspaceRoots.length; i++) {
+        await loadFileTreeForRoot(i);
+      }
+    }
+
+    // V0.16: 加载指定索引的根目录（重新拉数据并插入到对应段）
+    async function loadFileTreeForRoot(index) {
+      if (index < 0 || index >= workspaceRoots.length) return;
+      const root = workspaceRoots[index];
+      const container = document.getElementById('file-tree');
+      // 找到该 root 对应的内容容器
+      let contentEl = container.querySelector(`.file-tree-root-content[data-root-index="${index}"]`);
+      if (!contentEl) {
+        // 文件树整体还没渲染 → 触发整体渲染
+        renderFileTree();
+        contentEl = container.querySelector(`.file-tree-root-content[data-root-index="${index}"]`);
+        if (!contentEl) return;
+      }
+      contentEl.innerHTML = '<div class="file-tree-empty">加载中…</div>';
       try {
-        const result = await window.bridge.call('listDirectory', rootPath);
-        container.innerHTML = '';
+        const result = await window.bridge.call('listDirectory', root.path);
+        contentEl.innerHTML = '';
         if (result && result.tree) {
-          renderDirTree(container, result.tree, 0, true);
+          renderDirTree(contentEl, result.tree, 0, true, root.path);
         }
       } catch (e) {
-        container.innerHTML = '<div class="file-tree-empty">加载失败: ' + escapeHtml(e.message || '') + '</div>';
+        contentEl.innerHTML = '<div class="file-tree-empty">加载失败: ' + escapeHtml(e.message || '') + '</div>';
       }
     }
 
-    function renderDirTree(container, node, depth, isRoot) {
+    // V0.16: 整体渲染文件树（多根 + 添加按钮）
+    function renderFileTree() {
+      const container = document.getElementById('file-tree');
+      if (!container) return;
+      container.innerHTML = '';
+      if (!workspaceRoots.length) {
+        container.innerHTML = '<div class="file-tree-empty" data-i18n="fileTreeEmpty">点击 📁 打开文件夹</div>';
+        return;
+      }
+      workspaceRoots.forEach((root, idx) => {
+        // 分段（除第一段外加分割线）
+        if (idx > 0) {
+          const sep = document.createElement('div');
+          sep.className = 'file-tree-separator';
+          container.appendChild(sep);
+        }
+        // 根目录 header
+        const header = document.createElement('div');
+        header.className = 'file-tree-root-header';
+        header.innerHTML = `<svg class="icon icon-sm" style="flex-shrink:0"><use href="#icon-folder"></use></svg>
+          <span class="root-name" title="${escapeAttr(root.path)}">${escapeHtml(root.name)}</span>
+          <button class="root-remove" title="移除此工作区" onclick="closeWorkspace()">×</button>`;
+        container.appendChild(header);
+        // 子内容容器
+        const content = document.createElement('div');
+        content.className = 'file-tree-root-content';
+        content.dataset.rootIndex = String(idx);
+        container.appendChild(content);
+        // 异步加载
+        loadFileTreeForRoot(idx);
+      });
+      // 底部"+"按钮
+      const addBtn = document.createElement('button');
+      addBtn.className = 'file-tree-add-root';
+      addBtn.textContent = '+ 添加文件夹';
+      addBtn.onclick = openWorkspaceFolder;
+      container.appendChild(addBtn);
+      // 同步 currentWorkspaceRoot
+      currentWorkspaceRoot = workspaceRoots[0]?.path || null;
+    }
+
+    // V0.16: 持久化多根工作区
+    function saveWorkspaceRootsToStorage() {
+      try {
+        localStorage.setItem(WORKSPACE_ROOTS_KEY, JSON.stringify(workspaceRoots));
+      } catch {}
+    }
+
+    function loadWorkspaceRootsFromStorage() {
+      try {
+        const raw = localStorage.getItem(WORKSPACE_ROOTS_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (Array.isArray(data)) {
+            workspaceRoots = data.filter(r => r && r.path).map(r => ({ path: r.path, name: r.name || r.path.split(/[\\/]/).pop() }));
+          }
+        }
+        // V0.16 迁移: 从老 inkwell_workspace_root 迁移
+        if (!workspaceRoots.length) {
+          const oldRoot = localStorage.getItem('inkwell_workspace_root');
+          if (oldRoot) {
+            workspaceRoots.push({ path: oldRoot, name: oldRoot.split(/[\\/]/).pop() || oldRoot });
+            saveWorkspaceRootsToStorage();
+            // 清理老 key
+            try { localStorage.removeItem('inkwell_workspace_root'); } catch {}
+          }
+        }
+        currentWorkspaceRoot = workspaceRoots[0]?.path || null;
+      } catch (e) {
+        console.warn('loadWorkspaceRootsFromStorage failed', e);
+      }
+    }
+
+    // 旧 loadFileTree(rootPath) — 保留为新接口的 alias（不直接调用，但外部代码可能用）
+    async function loadFileTree(rootPath) {
+      const idx = workspaceRoots.findIndex(r => r.path === rootPath);
+      if (idx >= 0) {
+        await loadFileTreeForRoot(idx);
+      } else {
+        // 老用法：把 rootPath 当临时根加载（不持久化）
+        const container = document.getElementById('file-tree');
+        container.innerHTML = '<div class="file-tree-empty">加载中…</div>';
+        try {
+          const result = await window.bridge.call('listDirectory', rootPath);
+          container.innerHTML = '';
+          if (result && result.tree) {
+            renderDirTree(container, result.tree, 0, true, rootPath);
+          }
+        } catch (e) {
+          container.innerHTML = '<div class="file-tree-empty">加载失败: ' + escapeHtml(e.message || '') + '</div>';
+        }
+      }
+    }
+
+    function renderDirTree(container, node, depth, isRoot, rootPath) {
       if (!node) return;
       const row = document.createElement('div');
       row.className = 'ft-row';
@@ -2533,72 +2674,290 @@
     }
 
     // 统一应用 openFile / openFileDialog 的结果（文本 + DOCX 二进制都走这里）
+    // V0.16: 重构为 tab 系统 - 每次打开都加 tab，重复路径切到已有 tab
     async function applyOpenedFile(result, opts = {}) {
       if (!result || result.path === undefined) return;
       if (result.path === null) return; // 用户取消
-      const fileName = result.path.split(/[\\/]/).pop();
-      if (fileName) {
-        filenameInput.value = fileName;
-        document.getElementById('current-file-name').textContent = fileName;
+      const path = result.path;
+      // 已打开：切到那个 tab
+      if (openTabs.has(path)) {
+        // 同步 lastSaved（可能磁盘上更新了）
+        const tab = openTabs.get(path);
+        if (result.isBinary) {
+          tab.docxBase64 = result.contentBase64 || '';
+          tab.lastSavedDocxBase64 = tab.docxBase64;
+          tab.lastSavedContent = '';
+        } else {
+          tab.content = result.content || '';
+          tab.lastSavedContent = tab.content;
+        }
+        tab.dirty = false;
+        switchTab(path, { silent: opts.silent });
+        return;
       }
-      currentFilePath = result.path;
-      currentFileEncoding = result.encoding || 'utf-8';
-      currentFileLineEnding = result.lineEnding || 'lf';
-      updatePathDisplay();
-      currentFileHasFinalNewline = result.hasFinalNewline !== false;
+      // 新建 tab
+      const fileName = path.split(/[\\/]/).pop() || '';
       const ext = (fileName.split('.').pop() || '').toLowerCase();
       const format = result.isBinary ? (result.format || 'binary') : detectFileFormat(ext);
-      currentFileFormat = format;
+      const content = result.isBinary ? '' : (result.content || '');
+      const docxBase64 = result.isBinary ? (result.contentBase64 || '') : '';
+      openTabs.set(path, {
+        fileName,
+        content,
+        format,
+        encoding: result.encoding || 'utf-8',
+        lineEnding: result.lineEnding || 'lf',
+        hasFinalNewline: result.hasFinalNewline !== false,
+        docxBase64,
+        dirty: false,
+        lastSavedContent: content,
+        lastSavedDocxBase64: docxBase64,
+      });
+      tabOrder.push(path);
+      switchTab(path, { silent: opts.silent });
+    }
 
-      if (result.isBinary && format === 'docx') {
-        // DOCX 二进制：暂存 base64，等 updatePreview 走 mammoth 渲染
-        // 编辑区留空（用户不能直接编辑二进制），预览区显示解析后的内容
+    // V0.16: tab 切换 — 真理源在 openTabs Map
+    function switchTab(path, opts = {}) {
+      if (!path || !openTabs.has(path)) {
+        // 切到"无文件"状态
+        activeTabPath = null;
+        currentFilePath = null;
         editor.value = '';
         if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
-        currentDocxBase64 = result.contentBase64 || '';
-        editor.setAttribute('readonly', 'readonly');
-        editor.classList.add('editor-readonly');
-        // 强制切到预览模式
-        if (typeof setPreviewMode === 'function') setPreviewMode('preview');
-        // 禁止源码 tab
-        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
-        if (srcBtn) srcBtn.style.display = 'none';
-        showToast('DOCX 只读预览模式：可在右侧浏览，编辑请用 Word');
-      } else {
-        // 文本文件：正常装载
-        editor.value = result.content || '';
-        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = result.content || '';
         currentDocxBase64 = '';
+        currentFileFormat = 'md';
+        filenameInput.value = t('filenameDefault');
+        document.getElementById('current-file-name').textContent = t('editorPaneTitle');
         editor.removeAttribute('readonly');
         editor.classList.remove('editor-readonly');
-        // 恢复源码 tab 显示
         const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
         if (srcBtn) srcBtn.style.display = '';
-        // 第一次拿到路径才弹 toast；后续 setPreviewMode 触发的 reload 不弹
-        if (!opts.silent) {
-          const encInfo = result.encoding && result.encoding !== 'utf-8' ? ' [' + formatEncodingName(result.encoding) + ']' : '';
-          showToast('已打开 ' + result.path + encInfo);
+        renderTabs();
+        updatePreview(); updateCount(); updateEditorStats();
+        updateEncodingDisplay(); updateFormatDisplay();
+        refreshOutline();
+        saveTabsToStorage();
+        return;
+      }
+      // 1) 保存当前 active tab 状态到 Map
+      if (activeTabPath && activeTabPath !== path && openTabs.has(activeTabPath)) {
+        const cur = openTabs.get(activeTabPath);
+        cur.content = editor.value;
+        if (typeof previewSource !== 'undefined' && previewSource) cur.content = cur.format === 'docx' ? '' : cur.content;
+        cur.docxBase64 = currentDocxBase64 || cur.docxBase64;
+        cur.dirty = (cur.content !== cur.lastSavedContent) || (cur.docxBase64 !== cur.lastSavedDocxBase64);
+      }
+      // 2) 应用新 tab
+      activeTabPath = path;
+      const tab = openTabs.get(path);
+      currentFilePath = path;
+      currentFileFormat = tab.format;
+      currentFileEncoding = tab.encoding;
+      currentFileLineEnding = tab.lineEnding;
+      currentFileHasFinalNewline = tab.hasFinalNewline;
+      currentDocxBase64 = tab.docxBase64 || '';
+      // editor 内容
+      if (tab.format === 'docx') {
+        editor.value = '';
+        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
+        editor.setAttribute('readonly', 'readonly');
+        editor.classList.add('editor-readonly');
+        if (typeof setPreviewMode === 'function') setPreviewMode('preview');
+        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
+        if (srcBtn) srcBtn.style.display = 'none';
+      } else {
+        editor.value = tab.content || '';
+        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = tab.content || '';
+        editor.removeAttribute('readonly');
+        editor.classList.remove('editor-readonly');
+        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
+        if (srcBtn) srcBtn.style.display = '';
+      }
+      // 文件名 + UI
+      filenameInput.value = tab.fileName;
+      document.getElementById('current-file-name').textContent = tab.fileName;
+      activeFilePath = path;
+      localStorage.setItem(FILEPATH_KEY, path);
+      localStorage.setItem(FILENAME_KEY, tab.fileName);
+      localStorage.setItem(STORAGE_KEY, editor.value);
+      updatePreview(); updateCount(); updateEditorStats();
+      updateEncodingDisplay(); updateFormatDisplay();
+      updatePathDisplay();
+      refreshOutline();
+      // 文件树高亮
+      document.querySelectorAll('.ft-row[data-file-path]').forEach(r => {
+        r.classList.toggle('active', r.dataset.filePath === path);
+      });
+      if (!opts.silent) {
+        // 第一次打开弹 toast
+        if (tab.format === 'docx') {
+          showToast('DOCX 只读预览模式：可在右侧浏览，编辑请用 Word');
+        } else if (opts.showOpenToast) {
+          const encInfo = tab.encoding && tab.encoding !== 'utf-8' ? ' [' + formatEncodingName(tab.encoding) + ']' : '';
+          showToast('已打开 ' + path + encInfo);
         }
       }
-
-      activeFilePath = result.path;
-      localStorage.setItem(FILEPATH_KEY, result.path);
-      localStorage.setItem(FILENAME_KEY, filenameInput.value);
-      localStorage.setItem(STORAGE_KEY, editor.value);
-      updatePreview();
-      updateCount();
-      updateEncodingDisplay();
-      updateFormatDisplay();
-
-      if (opts.fromFileTree) {
-        // 高亮当前文件
-        document.querySelectorAll('.ft-row[data-file-path]').forEach(r => {
-          r.classList.toggle('active', r.dataset.filePath === result.path);
-        });
-        maybeSeedOllamaContext();
-      }
-      refreshOutline();
+      // 渲染 tab 栏
+      renderTabs();
+      saveTabsToStorage();
     }
+
+    // V0.16: 渲染 tab 栏
+    function renderTabs() {
+      const container = document.getElementById('editor-tabs');
+      if (!container) return;
+      if (!tabOrder.length) {
+        container.innerHTML = '';
+        container.classList.remove('has-tabs');
+        return;
+      }
+      container.classList.add('has-tabs');
+      const parts = tabOrder.map(path => {
+        const tab = openTabs.get(path);
+        if (!tab) return '';
+        const active = path === activeTabPath;
+        const dirtyMark = tab.dirty ? '<span class="tab-dirty" title="未保存">●</span>' : '';
+        return `<div class="editor-tab ${active ? 'active' : ''}" data-path="${escapeAttr(path)}" onclick="handleTabClick('${escapeAttr(path)}')">
+          ${dirtyMark}
+          <span class="tab-name" title="${escapeAttr(path)}">${escapeHtml(tab.fileName)}</span>
+          <button class="tab-close" title="关闭" onclick="event.stopPropagation(); closeTab('${escapeAttr(path)}')">×</button>
+        </div>`;
+      });
+      parts.push('<button class="tab-add" title="打开文件" onclick="openFileFromDisk()">+</button>');
+      container.innerHTML = parts.join('');
+    }
+
+    // V0.16: tab 点击 - 切到该 tab
+    function handleTabClick(path) {
+      if (path === activeTabPath) return;
+      switchTab(path);
+    }
+
+    // V0.16: 关闭 tab（核心交互：含 dirty 检查 + 询问保存）
+    async function closeTab(path) {
+      const tab = openTabs.get(path);
+      if (!tab) return;
+      // dirty 弹保存对话框
+      if (tab.dirty) {
+        const ok = await showConfirm(`"${tab.fileName}" 有未保存修改，要保存吗？\n\n确定 = 保存并关闭\n取消 = 放弃修改并关闭`);
+        if (ok) {
+          // 保存：先切到该 tab（saveToLocal 用全局 state），再保存
+          switchTab(path);
+          await saveToLocal();
+        }
+        // ok=false → 放弃修改，强制把 tab.content 还原成 lastSavedContent
+        if (!ok) {
+          tab.content = tab.lastSavedContent;
+          tab.docxBase64 = tab.lastSavedDocxBase64;
+          tab.dirty = false;
+        }
+      }
+      // 移除
+      openTabs.delete(path);
+      tabOrder = tabOrder.filter(p => p !== path);
+      // 关闭的是 active tab → 切到相邻或清空
+      if (activeTabPath === path) {
+        activeTabPath = null;
+        const idx = tabOrder.indexOf(path);
+        if (tabOrder.length > 0) {
+          // 切到原位置（如果不存在则取最后一个）
+          const next = tabOrder[Math.min(idx, tabOrder.length - 1)] || tabOrder[0];
+          switchTab(next);
+        } else {
+          // 没 tab 了：清空
+          currentFilePath = null;
+          filenameInput.value = t('filenameDefault');
+          document.getElementById('current-file-name').textContent = t('editorPaneTitle');
+          editor.value = '';
+          if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
+          currentDocxBase64 = '';
+          currentFileFormat = 'md';
+          editor.removeAttribute('readonly');
+          editor.classList.remove('editor-readonly');
+          const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
+          if (srcBtn) srcBtn.style.display = '';
+          updatePreview(); updateCount(); updateEditorStats();
+          updateEncodingDisplay(); updateFormatDisplay();
+          updatePathDisplay();
+          refreshOutline();
+          renderTabs();
+        }
+      } else {
+        renderTabs();
+      }
+      saveTabsToStorage();
+    }
+
+    // V0.16: 持久化 tab 列表（只存 path + lastSaved，不存内容）
+    function saveTabsToStorage() {
+      try {
+        const data = tabOrder
+          .map(path => {
+            const tab = openTabs.get(path);
+            if (!tab) return null;
+            return {
+              path,
+              fileName: tab.fileName,
+              format: tab.format,
+              encoding: tab.encoding,
+              lineEnding: tab.lineEnding,
+              hasFinalNewline: tab.hasFinalNewline,
+              lastSavedContent: tab.lastSavedContent,
+              lastSavedDocxBase64: tab.lastSavedDocxBase64,
+            };
+          })
+          .filter(Boolean);
+        localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(data));
+        if (activeTabPath) localStorage.setItem(ACTIVE_TAB_KEY, activeTabPath);
+        else localStorage.removeItem(ACTIVE_TAB_KEY);
+      } catch {}
+    }
+
+    // V0.16: 启动恢复 tabs（按 path 重新 openFile）
+    async function restoreTabsFromStorage() {
+      try {
+        const raw = localStorage.getItem(OPEN_TABS_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data) || !data.length) return;
+        const activePath = localStorage.getItem(ACTIVE_TAB_KEY);
+        for (const t of data) {
+          // 通过 bridge 重新加载文件
+          try {
+            const r = await window.bridge.call('openFile', t.path);
+            if (r) {
+              // 关键：bridge.openFile 只返回文件内容，不会自动建 tab；
+              // 必须显式调 applyOpenedFile 把结果注册到 tab 系统
+              await applyOpenedFile(r, { isRestore: true });
+            }
+          } catch (e) {
+            console.warn('restore tab failed:', t.path, e);
+          }
+        }
+        if (activePath && openTabs.has(activePath)) {
+          switchTab(activePath, { silent: true });
+        } else if (openTabs.size > 0) {
+          switchTab(tabOrder[0], { silent: true });
+        }
+        renderTabs();
+      } catch (e) {
+        console.warn('restoreTabsFromStorage failed', e);
+      }
+    }
+
+    // V0.16: 包装 confirm（统一走 C# 原生对话框；fallback 到 window.confirm）
+    function showConfirm(msg) {
+      if (window.bridge && window.chrome?.webview) {
+        return window.bridge.call('confirm', String(msg ?? ''), '保存')
+          .then(r => r === true || r === 'ok')
+          .catch(() => window.confirm(msg));
+      }
+      return Promise.resolve(window.confirm(msg));
+    }
+
+    // 旧 applyOpenedFile 已废弃 — 保留别名防旧调用方
+    // (no-op stub; 旧逻辑已并入上面的 tab 系统)
 
     function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
     function escapeHtml(s) {
@@ -2607,17 +2966,7 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // 恢复上次工作区
-    const savedRoot = localStorage.getItem('inkwell_workspace_root');
-    if (savedRoot) {
-      currentWorkspaceRoot = savedRoot;
-      loadFileTree(savedRoot);
-      // 更新标题 + 显示关闭按钮
-      const title = document.getElementById('file-tree-title');
-      if (title) title.textContent = savedRoot.split(/[\\/]/).pop() || savedRoot;
-      const closeBtn = document.getElementById('close-workspace-btn');
-      if (closeBtn) closeBtn.style.display = '';
-    }
+    // V0.16: 工作区 + tabs 恢复已移入 init()，统一在所有 module 加载完后执行
 
     // ========== V0.13: AI 大模型对话（多 Provider，OpenAI 协议 + Ollama 协议） ==========
     //
@@ -3710,6 +4059,22 @@
       // 初次渲染大纲（最后一步，必须执行）
       tryRun('outline', () => refreshOutline());
 
+      // V0.16: 恢复工作区（多根）和 tabs（必须在内容/大纲就绪之后，否则切 tab 时 UI 还没准备好）
+      tryRun('workspaceRoots', () => {
+        loadWorkspaceRootsFromStorage();
+        if (workspaceRoots.length > 0) {
+          // 重新渲染文件树（每个 root 单独加载）
+          workspaceRoots.forEach((_, idx) => loadFileTreeForRoot(idx));
+          // 同步兼容字段
+          currentWorkspaceRoot = workspaceRoots[0]?.path || null;
+        }
+      });
+      // 恢复 tabs（异步，等 bridge.ready 后再 openFile）
+      tryRun('restoreTabs', () => {
+        // 不 await，fire-and-forget；内部自己处理时序
+        restoreTabsFromStorage();
+      });
+
       if (errors.length) console.warn('[init] completed with errors:', errors);
     }
 
@@ -3824,6 +4189,150 @@
         .docx-content table { border-collapse: collapse; margin: 12px 0; }
         .docx-content table td, .docx-content table th { border: 1px solid var(--border); padding: 6px 10px; }
         .editor-readonly { color: var(--text-muted); background: var(--surface); }
+        /* V0.16: 多文件 tab 栏 */
+        .editor-tabs {
+          display: none;
+          align-items: stretch;
+          background: var(--surface);
+          border-bottom: 1px solid var(--border);
+          min-height: 30px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: thin;
+          padding: 0 2px;
+          user-select: none;
+        }
+        .editor-tabs.has-tabs { display: flex; }
+        .editor-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 6px 4px 12px;
+          border-right: 1px solid var(--border);
+          cursor: pointer;
+          font-size: 12.5px;
+          color: var(--text-secondary);
+          max-width: 200px;
+          position: relative;
+          transition: background .15s var(--ease);
+          flex-shrink: 0;
+          height: 30px;
+        }
+        .editor-tab:hover {
+          background: var(--surface-hover);
+          color: var(--text);
+        }
+        .editor-tab.active {
+          background: var(--bg);
+          color: var(--text);
+          font-weight: 500;
+        }
+        .editor-tab.active::after {
+          content: '';
+          position: absolute;
+          bottom: -1px; left: 0; right: 0;
+          height: 2px;
+          background: var(--accent);
+        }
+        .tab-dirty {
+          color: var(--accent);
+          font-weight: 700;
+          font-size: 14px;
+        }
+        .tab-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .tab-close {
+          width: 18px; height: 18px;
+          display: inline-flex;
+          align-items: center; justify-content: center;
+          border-radius: 4px;
+          color: var(--text-muted);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          font-size: 16px; line-height: 1;
+          padding: 0;
+        }
+        .tab-close:hover {
+          background: var(--surface);
+          color: var(--danger);
+        }
+        .tab-add {
+          padding: 4px 10px;
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+        .tab-add:hover {
+          color: var(--accent);
+          background: var(--surface-hover);
+        }
+        /* V0.16: 文件树多根工作区分段 */
+        .file-tree-separator {
+          height: 1px;
+          background: var(--border);
+          margin: 6px 8px;
+          opacity: 0.6;
+        }
+        .file-tree-root-header {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          font-size: 11.5px;
+          color: var(--text-muted);
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+        }
+        .file-tree-root-header .root-name {
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .file-tree-root-header .root-remove {
+          width: 18px; height: 18px;
+          display: inline-flex;
+          align-items: center; justify-content: center;
+          border-radius: 4px;
+          color: var(--text-muted);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          font-size: 14px;
+          padding: 0;
+        }
+        .file-tree-root-header .root-remove:hover {
+          background: var(--surface-hover);
+          color: var(--danger);
+        }
+        .file-tree-root-content {
+          /* 复用现有 .ft-row 样式 */
+        }
+        .file-tree-add-root {
+          display: block;
+          width: calc(100% - 16px);
+          margin: 4px 8px;
+          padding: 6px;
+          font-size: 12px;
+          color: var(--text-muted);
+          background: transparent;
+          border: 1px dashed var(--border);
+          border-radius: 6px;
+          cursor: pointer;
+        }
+        .file-tree-add-root:hover {
+          color: var(--accent);
+          border-color: var(--accent);
+          background: var(--accent-soft);
+        }
       `;
       document.head.appendChild(s);
     })();
@@ -4013,6 +4522,15 @@
         if (currentFilePath && window.bridge) {
           // 已有路径 → 直接覆盖（保留原文件的行尾符/末尾换行）
           await window.bridge.call('saveFile', currentFilePath, editor.value, currentFileLineEnding, currentFileHasFinalNewline);
+          // V0.16: 保存成功 → 更新 lastSavedContent + 清除 dirty
+          if (activeTabPath && openTabs.has(activeTabPath)) {
+            const tab = openTabs.get(activeTabPath);
+            tab.lastSavedContent = editor.value;
+            tab.content = editor.value;
+            tab.dirty = false;
+            renderTabs();
+            saveTabsToStorage();
+          }
           showSaveHint();
           showToast(t('toastSaved') + ' → ' + currentFilePath.split(/[\\/]/).pop());
         } else if (window.bridge) {
@@ -4038,22 +4556,63 @@
         const suggestedName = filenameInput.value.trim() || '未命名文档.md';
         const result = await window.bridge.call('saveAsDialog', editor.value, suggestedName, currentFileLineEnding, currentFileHasFinalNewline);
         if (result && result.path) {
-          currentFilePath = result.path;
-          localStorage.setItem(FILEPATH_KEY, result.path);
-          // 同步文件名输入框
-          const fileName = result.path.split(/[\\/]/).pop();
-          if (fileName) filenameInput.value = fileName;
-          updatePathDisplay();
-          // 更新文件格式
+          const newPath = result.path;
+          const fileName = newPath.split(/[\\/]/).pop();
           const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = detectFileFormat(ext);
-          currentFileLineEnding = result.lineEnding || currentFileLineEnding;
-          currentFileHasFinalNewline = result.hasFinalNewline !== false;
-          localStorage.setItem(FILENAME_KEY, filenameInput.value);
-          updateFormatDisplay();
-          updatePreview();
+          const newFormat = detectFileFormat(ext);
+          // V0.16: 路径变了 → 把当前 tab 移到新路径
+          if (activeTabPath && openTabs.has(activeTabPath)) {
+            const oldTab = openTabs.get(activeTabPath);
+            const newTab = {
+              ...oldTab,
+              fileName,
+              format: newFormat,
+              encoding: result.encoding || 'utf-8',
+              lineEnding: result.lineEnding || currentFileLineEnding,
+              hasFinalNewline: result.hasFinalNewline !== false,
+              content: editor.value,
+              lastSavedContent: editor.value,
+              dirty: false,
+            };
+            openTabs.delete(activeTabPath);
+            const idx = tabOrder.indexOf(activeTabPath);
+            tabOrder[idx] = newPath;
+            openTabs.set(newPath, newTab);
+            activeTabPath = newPath;
+            currentFilePath = newPath;
+            currentFileFormat = newFormat;
+            currentFileLineEnding = newTab.lineEnding;
+            currentFileHasFinalNewline = newTab.hasFinalNewline;
+            filenameInput.value = fileName;
+            document.getElementById('current-file-name').textContent = fileName;
+            activeFilePath = newPath;
+            localStorage.setItem(FILEPATH_KEY, newPath);
+            localStorage.setItem(FILENAME_KEY, fileName);
+            localStorage.setItem(STORAGE_KEY, editor.value);
+            updatePathDisplay();
+            updateFormatDisplay();
+            updatePreview();
+            renderTabs();
+            saveTabsToStorage();
+            // 文件树高亮
+            document.querySelectorAll('.ft-row[data-file-path]').forEach(r => {
+              r.classList.toggle('active', r.dataset.filePath === newPath);
+            });
+          } else {
+            currentFilePath = newPath;
+            filenameInput.value = fileName;
+            currentFileFormat = newFormat;
+            currentFileLineEnding = result.lineEnding || currentFileLineEnding;
+            currentFileHasFinalNewline = result.hasFinalNewline !== false;
+            activeFilePath = newPath;
+            localStorage.setItem(FILEPATH_KEY, newPath);
+            localStorage.setItem(FILENAME_KEY, fileName);
+            updatePathDisplay();
+            updateFormatDisplay();
+            updatePreview();
+          }
           showSaveHint();
-          showToast('✓ 已保存到 ' + result.path);
+          showToast('✓ 已保存到 ' + newPath);
         }
       } catch (e) {
         console.error('saveAs failed', e);
@@ -5642,6 +6201,15 @@ ${'</scr' + 'ipt>'}
     editor.addEventListener('input', () => {
       clearTimeout(historyTimer);
       historyTimer = setTimeout(recordHistory, 400);
+      // V0.16: 同步到 active tab.content + 检查 dirty
+      if (activeTabPath && openTabs.has(activeTabPath)) {
+        const tab = openTabs.get(activeTabPath);
+        if (tab.format !== 'docx') {
+          tab.content = editor.value;
+          tab.dirty = (tab.content !== tab.lastSavedContent);
+          renderTabs();  // 更新 dirty ● 标记
+        }
+      }
       updatePreview();
       updateCount();
       updateEditorStats();

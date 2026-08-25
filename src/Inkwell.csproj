@@ -9,9 +9,9 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>Inkwell</AssemblyName>
     <RootNamespace>Inkwell</RootNamespace>
-    <Version>0.15.0</Version>
-    <FileVersion>0.15.0.0</FileVersion>
-    <AssemblyVersion>0.15.0.0</AssemblyVersion>
+    <Version>0.16.0</Version>
+    <FileVersion>0.16.0.0</FileVersion>
+    <AssemblyVersion>0.16.0.0</AssemblyVersion>
     <Product>Inkwell</Product>
     <Description>单文件 Markdown / JSON 编辑器</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
