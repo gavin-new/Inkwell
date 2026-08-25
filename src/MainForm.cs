@@ -54,7 +54,10 @@ public sealed class MainForm : Form
     //         dock 视口钳制防拖丢 + 一键复位）
     //         29（修复浮动 dock 的 fixed 定位被 .tool-docks 的 backdrop-filter
     //            劫持：浮动时移挂 body，复位时放回原容器）
-    private const string ResourcesVersion = "29";
+    // V0.15j: 30（「保存」按钮移到顶栏最右；文件关联升级为系统关联向导：
+    //            注册应用能力 + 弹 IApplicationAssociationRegistrationUI 系统窗口，
+    //            失败降级 ms-settings:defaultapps）
+    private const string ResourcesVersion = "30";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

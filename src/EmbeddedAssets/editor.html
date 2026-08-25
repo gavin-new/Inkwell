@@ -1705,7 +1705,6 @@
       <span class="brand" data-i18n="brand">Inkwell</span>
       <div class="spacer"></div>
       <div class="top-actions">
-        <button onclick="saveToLocal()" class="primary" data-i18n-title="save"><svg class="icon"><use href="#icon-save"></use></svg> <span data-i18n="save">保存</span></button>
         <button onclick="saveAsFile()" data-i18n-title="saveAs" title="另存为…"><svg class="icon"><use href="#icon-save-copy"></use></svg></button>
         <button onclick="openFileFromDisk()" data-i18n-title="fileOpen" title="打开文件…"><svg class="icon"><use href="#icon-folder"></use></svg> <span data-i18n="fileOpen">打开</span></button>
         <label for="importFile" data-i18n-title="importBtn" title="从浏览器导入（旧版）"><svg class="icon"><use href="#icon-upload"></use></svg></label>
@@ -1741,6 +1740,7 @@
       </div>
       <!-- 文件名栏：置于最右上方（V0.15h） -->
       <input type="text" id="filename" value="未命名文档.md" data-i18n-title="filenameTitle" title="文件名">
+      <button onclick="saveToLocal()" class="primary" data-i18n-title="save" title="保存"><svg class="icon"><use href="#icon-save"></use></svg> <span data-i18n="save">保存</span></button>
     </div>
 
     <div class="workspace">
@@ -3376,16 +3376,22 @@
       showToast(t('docksReset'), 'success');
     }
 
-    // 文件关联：把 .md/.markdown/.json 加入系统「打开方式」列表
+    // 文件关联向导：注册 .md/.markdown/.json 并弹出系统「设置程序关联」窗口，
+    // 用户勾选后保存即设为默认打开方式（失败时自动打开系统默认应用设置页）
     async function associateFileTypes() {
       if (!window.bridge) {
         showToast(t('bridgeUnavailable'), 'error');
         return;
       }
       try {
-        const r = await window.bridge.call('associateFileTypes');
-        if (r && r.ok) showToast(t('assocDone'), 'success');
-        else showToast(t('assocFailed'), 'error');
+        const r = await window.bridge.call('openAssociationWizard');
+        if (r && r.ok) {
+          showToast(r.mode === 'dialog'
+            ? t('assocWizardDone')
+            : t('assocDone'), 'success');
+        } else {
+          showToast(t('assocFailed'), 'error');
+        }
       } catch (e) {
         showToast(t('assocFailed') + ': ' + (e.message || e), 'error');
       }

@@ -14,6 +14,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using Microsoft.VisualBasic;
 using Microsoft.Web.WebView2.Core;
 
@@ -95,6 +96,7 @@ internal sealed class ApiBridge
                 "setCurrentFile" => SetCurrentFile(args),
                 "readResource" => ReadResource(args),
                 "associateFileTypes" => AssociateFileTypes(),
+                "openAssociationWizard" => await OpenAssociationWizard(),
                 "getStartupInfo" => GetStartupInfo(),
                 "setTitle" => SetWindowTitle(args),
                 "showInFolder" => ShowInFolder(args),
@@ -694,9 +696,8 @@ internal sealed class ApiBridge
 
     /// <summary>
     /// 文件关联（V0.15i）：把 Inkwell 注册到 .md / .markdown / .json 的
-    /// 「打开方式」列表（HKCU，无需管理员）。写入 ProgId + OpenWithProgids；
-    /// 成为系统"默认应用"仍需用户在 设置 → 默认应用 里选一次（Win10/11 限制）。
-    /// 双击打开由 Program.Main 的 args[0] → InitialFilePath → JS getInitialFile 承接。
+    /// 「打开方式」列表（HKCU，无需管理员）。写入 ProgId + OpenWithProgids +
+    /// RegisteredApplications 应用能力（供系统关联向导展示）。
     /// </summary>
     private object AssociateFileTypes()
     {
@@ -715,7 +716,69 @@ internal sealed class ApiBridge
                 @"Software\Classes\" + ext + @"\OpenWithProgids");
             extKey.SetValue("Inkwell.Document", new byte[0], Microsoft.Win32.RegistryValueKind.None);
         }
+        // 应用能力注册：系统「默认应用」向导据此列出 Inkwell 支持的扩展名
+        using (var regApps = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications"))
+            regApps.SetValue("Inkwell", @"Software\Inkwell\Capabilities");
+        using (var cap = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Inkwell\Capabilities"))
+        {
+            cap.SetValue("ApplicationName", "Inkwell");
+            cap.SetValue("ApplicationDescription", "一款本地优先的 Markdown / JSON 编辑器");
+            using (var fa = cap.CreateSubKey("FileAssociations"))
+                foreach (var ext in new[] { ".md", ".markdown", ".json" })
+                    fa.SetValue(ext, "Inkwell.Document");
+        }
         return new { ok = true };
+    }
+
+    /// <summary>
+    /// 关联向导（V0.15j）：弹系统「设置程序关联」窗口（IApplicationAssociationRegistrationUI，
+    /// 与 VS Code 安装器同款），用户勾选 .md/.json 点保存即完成默认关联；
+    /// 失败时降级为直接打开 设置 → 默认应用 页面。
+    /// </summary>
+    private async Task<object> OpenAssociationWizard()
+    {
+        AssociateFileTypes();   // 先确保注册最新（exe 路径可能变化）
+        var tcs = new TaskCompletionSource<bool>();
+        // 模态 UI 必须推迟到消息处理结束后（同文件对话框，不能在回调里直接弹）
+        _form.BeginInvoke(() =>
+        {
+            try
+            {
+                var ui = (IApplicationAssociationRegistrationUI)new ApplicationAssociationRegistrationUIClass();
+                ui.LaunchAdvancedAssociationUI("Inkwell");
+                tcs.SetResult(true);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"LaunchAdvancedAssociationUI failed: {ex.Message}");
+                // Win10/11 的系统限制：老关联向导已被移除/受限。降级为直达设置页：
+                // 优先用 deep link 打开 Inkwell 的专属默认应用页（免搜索），
+                // 不支持时退回通用「默认应用」页
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "ms-settings:defaultapps?registeredApplicationName=Inkwell",
+                        UseShellExecute = true,
+                    });
+                }
+                catch
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "ms-settings:defaultapps",
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch { }
+                }
+                tcs.SetResult(false);
+            }
+        });
+        bool usedDialog = await tcs.Task;
+        return new { ok = true, mode = usedDialog ? "dialog" : "settings" };
     }
 
     private object SetCurrentFile(JsonElement args)
@@ -869,4 +932,19 @@ internal sealed class ApiBridge
         }
         catch { return false; }
     }
+}
+
+/// <summary>
+/// Windows 系统关联向导（shell32）：
+/// LaunchAdvancedAssociationUI 弹出「设置程序关联」窗口，按 ProgId 列出
+/// 该应用支持的扩展名，用户勾选保存即设为默认打开方式。
+/// </summary>
+[ComImport, Guid("1968106d-f3b5-44cf-890e-116fcb9ecef1")]
+internal class ApplicationAssociationRegistrationUIClass { }
+
+[ComImport, Guid("1f76a169-fa4c-4b62-979e-cf677ac0ff2f"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IApplicationAssociationRegistrationUI
+{
+    [PreserveSig]
+    int LaunchAdvancedAssociationUI([MarshalAs(UnmanagedType.LPWStr)] string pszAppRegistryName);
 }
