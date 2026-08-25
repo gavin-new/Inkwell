@@ -2874,11 +2874,18 @@
         if (choice === 'save') {
           switchTab(path);
           await saveToLocal();
-          // 如果保存失败（tab.dirty 仍为 true），不关闭
+          // 如果保存失败（tab.dirty 仍为 true），再问一次是否放弃关闭
           const t2 = openTabs.get(path);
           if (t2 && t2.dirty) {
-            showToast('保存失败，未关闭', 'error');
-            return;
+            const forceClose = await showConfirm('保存失败，是否仍要放弃修改并关闭？\n\n确定 = 放弃修改并关闭\n取消 = 保留 tab 不关闭');
+            if (!forceClose) {
+              showToast('已保留 tab，请修复保存问题后重试', 'info');
+              return;
+            }
+            // 强制放弃修改
+            t2.content = t2.lastSavedContent;
+            t2.docxBase64 = t2.lastSavedDocxBase64;
+            t2.dirty = false;
           }
         } else if (choice === 'discard') {
           // 放弃修改：把 content 还原成 lastSaved

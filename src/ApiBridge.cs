@@ -90,7 +90,7 @@ internal sealed class ApiBridge
                 "pickSavePath" => await PickSavePath(args),
                 "pickOpenPath" => await PickOpenPath(args),
                 "confirm" => ConfirmDialog(args),
-                "confirm3" => ConfirmDialog3(args),
+                "confirm3" => await ConfirmDialog3(args),
                 "alert" => AlertDialog(args),
                 "prompt" => PromptDialog(args),
                 "getInitialFile" => _form.InitialFilePath,
@@ -671,7 +671,9 @@ internal sealed class ApiBridge
 
     // V0.16c: 三按钮对话框（保存/放弃/取消）— 用 MessageBox YesNoCancel
     // 返回字符串 "save" / "discard" / "cancel"
-    private string ConfirmDialog3(JsonElement args)
+    // 用 BeginInvoke + await 避免在 WebView2 消息回调内同步弹模态对话框
+    // （那样会落到主窗口后面，表现为"点了没反应"）
+    private async Task<string> ConfirmDialog3(JsonElement args)
     {
         string message = args[0].GetString() ?? "";
         string? title = args[1].ValueKind == JsonValueKind.String ? args[1].GetString() : null;
@@ -679,20 +681,24 @@ internal sealed class ApiBridge
         string btnDiscard = args[3].ValueKind == JsonValueKind.String ? args[3].GetString() ?? "放弃" : "放弃";
         string btnCancel = args[4].ValueKind == JsonValueKind.String ? args[4].GetString() ?? "取消" : "取消";
         var tcs = new TaskCompletionSource<string>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
-            // 用自定义按钮的 MessageBox 不可行；改用 YesNoCancel，标签写到 message 里
-            string fullMessage = $"{message}\n\n是({btnSave}) / 否({btnDiscard}) / 取消({btnCancel})";
-            var r = MessageBox.Show(_form, fullMessage, title ?? "关闭文档",
-                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
-            switch (r)
+            try
             {
-                case DialogResult.Yes:    tcs.SetResult("save"); break;
-                case DialogResult.No:     tcs.SetResult("discard"); break;
-                default:                  tcs.SetResult("cancel"); break;
+                // MessageBox 的按钮不能自定义文字；用 YesNoCancel，标签写到 message 里
+                string fullMessage = $"{message}\n\n是({btnSave}) / 否({btnDiscard}) / 取消({btnCancel})";
+                var r = MessageBox.Show(_form, fullMessage, title ?? "关闭文档",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+                switch (r)
+                {
+                    case DialogResult.Yes:    tcs.SetResult("save"); break;
+                    case DialogResult.No:     tcs.SetResult("discard"); break;
+                    default:                  tcs.SetResult("cancel"); break;
+                }
             }
+            catch (Exception ex) { tcs.SetException(ex); }
         });
-        return tcs.Task.GetAwaiter().GetResult();
+        return await tcs.Task;
     }
 
     private bool AlertDialog(JsonElement args)
