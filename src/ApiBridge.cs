@@ -127,19 +127,44 @@ internal sealed class ApiBridge
     {
         string path = args.GetString() ?? "";
         if (!File.Exists(path)) throw new FileNotFoundException("文件不存在", path);
-        var (content, encoding, lineEnding, hasFinalNewline) = await ReadFileAutoDetectAsync(path);
         CurrentFilePath = path;
-        return new { path, content, encoding, lineEnding, hasFinalNewline };
+        return await LoadFileResultAsync(path);
     }
 
     private async Task<object?> OpenFileDialog()
     {
-        string? path = await PickOpenPath(JsonDocument.Parse("[\"所有支持的格式|*.md;*.markdown;*.txt;*.csv;*.py;*.adoc;*.rst;*.org;*.rtf;*.textile;*.mediawiki;*.opml;*.tex;*.js;*.ts;*.json;*.yaml;*.yml;*.toml;*.xml;*.html;*.css;*.sh;*.ps1|Markdown 文件|*.md;*.markdown|纯文本|*.txt|CSV|*.csv|Python|*.py|JavaScript/TypeScript|*.js;*.ts|配置文件|*.json;*.yaml;*.yml;*.toml;*.xml|HTML/CSS|*.html;*.css|脚本|*.sh;*.ps1|AsciiDoc|*.adoc|reStructuredText|*.rst|Org-mode|*.org|RTF|*.rtf|所有文件|*.*\"]").RootElement);
+        string? path = await PickOpenPath(JsonDocument.Parse("[\"所有支持的格式|*.md;*.markdown;*.txt;*.csv;*.py;*.adoc;*.rst;*.org;*.rtf;*.textile;*.mediawiki;*.opml;*.tex;*.js;*.ts;*.json;*.yaml;*.yml;*.toml;*.xml;*.html;*.css;*.sh;*.ps1;*.docx;*.doc|Markdown 文件|*.md;*.markdown|纯文本|*.txt|CSV|*.csv|Python|*.py|JavaScript/TypeScript|*.js;*.ts|配置文件|*.json;*.yaml;*.yml;*.toml;*.xml|HTML/CSS|*.html;*.css|脚本|*.sh;*.ps1|AsciiDoc|*.adoc|reStructuredText|*.rst|Org-mode|*.org|RTF|*.rtf|Word 文档|*.docx;*.doc|所有文件|*.*\"]").RootElement);
         if (path == null) return null;
         if (!File.Exists(path)) throw new FileNotFoundException("文件不存在", path);
-        var (content, encoding, lineEnding, hasFinalNewline) = await ReadFileAutoDetectAsync(path);
         CurrentFilePath = path;
-        return new { path, content, encoding, lineEnding, hasFinalNewline };
+        return await LoadFileResultAsync(path);
+    }
+
+    /// <summary>
+    /// 统一文件加载入口：根据扩展名走文本或二进制路径
+    /// DOCX/PPT/ZIP 这类二进制格式直接返回 base64 字符串，前端用 mammoth 等库渲染
+    /// </summary>
+    private static async Task<object> LoadFileResultAsync(string path)
+    {
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext == ".docx" || ext == ".doc")
+        {
+            // DOCX：按 ZIP+XML 二进制处理，返回 base64
+            byte[] bytes = await File.ReadAllBytesAsync(path);
+            return new
+            {
+                path,
+                content = (string?)null,
+                contentBase64 = Convert.ToBase64String(bytes),
+                isBinary = true,
+                format = "docx",
+                encoding = "binary",
+                lineEnding = "none",
+                hasFinalNewline = false
+            };
+        }
+        var (text, enc, le, hfn) = await ReadFileAutoDetectAsync(path);
+        return new { path, content = text, contentBase64 = (string?)null, isBinary = false, format = (string?)null, encoding = enc, lineEnding = le, hasFinalNewline = hfn };
     }
 
     private async Task<object?> SaveFile(JsonElement args)

@@ -59,7 +59,9 @@ public sealed class MainForm : Form
     // V0.15j: 30（「保存」按钮移到顶栏最右；文件关联升级为系统关联向导：
     //            注册应用能力 + 弹 IApplicationAssociationRegistrationUI 系统窗口，
     //            失败降级 ms-settings:defaultapps）
-    private const string ResourcesVersion = "30";
+    // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
+    //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
+    private const string ResourcesVersion = "31";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

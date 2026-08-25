@@ -2226,6 +2226,7 @@
   <script src="vendor/katex.min.js"></script>
   <script src="vendor/auto-render.min.js"></script>
   <script src="vendor/mermaid.min.js"></script>
+  <script src="vendor/mammoth.browser.min.js"></script>
   <script src="i18n.js"></script>
 
   <!-- C# ↔ JS 桥接（在主脚本之前） -->
@@ -2243,6 +2244,7 @@
     const FILENAME_KEY = 'md_editor_filename';
     const FILEPATH_KEY = 'md_editor_filepath';
     let currentFilePath = localStorage.getItem(FILEPATH_KEY) || null;
+    let currentDocxBase64 = '';  // DOCX 二进制 base64（只读预览模式）
     const THEME_KEY = 'md_editor_theme';
     const HELP_SHOWN_KEY = 'md_editor_help_shown';
     const PREVIEW_MODE_KEY = 'md_editor_preview_mode';
@@ -2523,39 +2525,79 @@
       try {
         const result = await window.bridge.call('openFile', path);
         if (result) {
-          editor.value = result.content;
-          const fileName = result.path.split(/[\\/]/).pop();
-          if (fileName) {
-            filenameInput.value = fileName;
-            document.getElementById('current-file-name').textContent = fileName;
-          }
-          currentFilePath = result.path;
-          currentFileEncoding = result.encoding || 'utf-8';
-          currentFileLineEnding = result.lineEnding || 'lf';
-          updatePathDisplay();
-          currentFileHasFinalNewline = result.hasFinalNewline !== false;
-          const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = detectFileFormat(ext);
-          activeFilePath = result.path;
-          localStorage.setItem(FILEPATH_KEY, result.path);
-          localStorage.setItem(FILENAME_KEY, filenameInput.value);
-          localStorage.setItem(STORAGE_KEY, editor.value);
-          updatePreview();
-          updateCount();
-          updateEncodingDisplay();
-          updateFormatDisplay();
-          // 高亮当前文件
-          document.querySelectorAll('.ft-row[data-file-path]').forEach(r => {
-            r.classList.toggle('active', r.dataset.filePath === path);
-          });
-          // 刷新大纲
-          refreshOutline();
-          // 自动注入上下文到 Ollama（如果聊天是空的就送编辑器内容）
-          maybeSeedOllamaContext();
+          applyOpenedFile(result, { fromFileTree: true });
         }
       } catch (e) {
         showToast('打开失败: ' + (e.message || e), 'error');
       }
+    }
+
+    // 统一应用 openFile / openFileDialog 的结果（文本 + DOCX 二进制都走这里）
+    async function applyOpenedFile(result, opts = {}) {
+      if (!result || result.path === undefined) return;
+      if (result.path === null) return; // 用户取消
+      const fileName = result.path.split(/[\\/]/).pop();
+      if (fileName) {
+        filenameInput.value = fileName;
+        document.getElementById('current-file-name').textContent = fileName;
+      }
+      currentFilePath = result.path;
+      currentFileEncoding = result.encoding || 'utf-8';
+      currentFileLineEnding = result.lineEnding || 'lf';
+      updatePathDisplay();
+      currentFileHasFinalNewline = result.hasFinalNewline !== false;
+      const ext = (fileName.split('.').pop() || '').toLowerCase();
+      const format = result.isBinary ? (result.format || 'binary') : detectFileFormat(ext);
+      currentFileFormat = format;
+
+      if (result.isBinary && format === 'docx') {
+        // DOCX 二进制：暂存 base64，等 updatePreview 走 mammoth 渲染
+        // 编辑区留空（用户不能直接编辑二进制），预览区显示解析后的内容
+        editor.value = '';
+        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
+        currentDocxBase64 = result.contentBase64 || '';
+        editor.setAttribute('readonly', 'readonly');
+        editor.classList.add('editor-readonly');
+        // 强制切到预览模式
+        if (typeof setPreviewMode === 'function') setPreviewMode('preview');
+        // 禁止源码 tab
+        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
+        if (srcBtn) srcBtn.style.display = 'none';
+        showToast('DOCX 只读预览模式：可在右侧浏览，编辑请用 Word');
+      } else {
+        // 文本文件：正常装载
+        editor.value = result.content || '';
+        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = result.content || '';
+        currentDocxBase64 = '';
+        editor.removeAttribute('readonly');
+        editor.classList.remove('editor-readonly');
+        // 恢复源码 tab 显示
+        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
+        if (srcBtn) srcBtn.style.display = '';
+        // 第一次拿到路径才弹 toast；后续 setPreviewMode 触发的 reload 不弹
+        if (!opts.silent) {
+          const encInfo = result.encoding && result.encoding !== 'utf-8' ? ' [' + formatEncodingName(result.encoding) + ']' : '';
+          showToast('已打开 ' + result.path + encInfo);
+        }
+      }
+
+      activeFilePath = result.path;
+      localStorage.setItem(FILEPATH_KEY, result.path);
+      localStorage.setItem(FILENAME_KEY, filenameInput.value);
+      localStorage.setItem(STORAGE_KEY, editor.value);
+      updatePreview();
+      updateCount();
+      updateEncodingDisplay();
+      updateFormatDisplay();
+
+      if (opts.fromFileTree) {
+        // 高亮当前文件
+        document.querySelectorAll('.ft-row[data-file-path]').forEach(r => {
+          r.classList.toggle('active', r.dataset.filePath === result.path);
+        });
+        maybeSeedOllamaContext();
+      }
+      refreshOutline();
     }
 
     function escapeAttr(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
@@ -3678,6 +3720,11 @@
         renderJsonPreview();
         return;
       }
+      // DOCX 二进制：mammoth 异步渲染
+      if (currentFileFormat === 'docx') {
+        renderDocxPreview();
+        return;
+      }
       // 纯文本 / 其他笔记格式 → 显示原始文本（避免误用 Markdown 渲染破坏内容）
       if (currentFileFormat === 'plain') {
         const ext = (filenameInput.value.split('.').pop() || '').toUpperCase();
@@ -3750,6 +3797,71 @@
           img.src = r.dataUrl;
         }
       } catch { /* 读取失败保持原样（按原相对地址加载，裂图即裂图） */ }
+    }
+
+    // DOCX 只读预览样式（V0.15d）
+    (function injectDocxStyle(){
+      if (document.getElementById('docx-style')) return;
+      const s = document.createElement('style');
+      s.id = 'docx-style';
+      s.textContent = `
+        .docx-readonly-banner {
+          padding: 10px 24px;
+          background: var(--accent-soft);
+          color: var(--accent);
+          font-size: 12px;
+          font-weight: 500;
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .docx-content {
+          font-family: var(--font-sans);
+          line-height: 1.7;
+        }
+        .docx-content img { max-width: 100%; height: auto; }
+        .docx-content table { border-collapse: collapse; margin: 12px 0; }
+        .docx-content table td, .docx-content table th { border: 1px solid var(--border); padding: 6px 10px; }
+        .editor-readonly { color: var(--text-muted); background: var(--surface); }
+      `;
+      document.head.appendChild(s);
+    })();
+
+    // DOCX 只读预览：用 mammoth 把 base64 解码后转 HTML
+    function renderDocxPreview() {
+      if (!currentDocxBase64) {
+        preview.innerHTML = '<div style="padding:60px 24px;color:var(--text-muted);text-align:center;">没有可显示的 DOCX 内容</div>';
+        return;
+      }
+      // 先显示 banner 占位，mammoth 是异步
+      preview.innerHTML = '<div class="docx-readonly-banner">📄 DOCX 只读预览 · 由 mammoth 解析 Word 文档 · 编辑请用 Word</div>' +
+        '<div class="docx-content" style="padding:32px 40px;color:var(--text-muted);">⏳ 解析中…</div>';
+      // base64 → ArrayBuffer
+      let bytes;
+      try {
+        const bin = atob(currentDocxBase64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        bytes = arr.buffer;
+      } catch (err) {
+        preview.innerHTML = '<div style="padding:40px 24px;color:var(--danger);">DOCX 解码失败：' + escapeHtml(err.message) + '</div>';
+        return;
+      }
+      if (typeof mammoth === 'undefined' || !mammoth.convertToHtml) {
+        preview.innerHTML = '<div style="padding:40px 24px;color:var(--danger);">mammoth.js 未加载</div>';
+        return;
+      }
+      mammoth.convertToHtml({ arrayBuffer: bytes }, { styleMap: 'default' }).then(result => {
+        const banner = '<div class="docx-readonly-banner">📄 DOCX 只读预览 · 由 mammoth 解析 Word 文档 · 编辑请用 Word</div>';
+        preview.innerHTML = banner + '<div class="markdown-body docx-content" style="padding:32px 40px;">' + result.value + '</div>';
+        if (result.messages && result.messages.length) {
+          const msgs = result.messages.slice(0, 3).map(m => m.message).join('；');
+          console.warn('mammoth warnings:', msgs);
+        }
+      }).catch(err => {
+        preview.innerHTML = '<div style="padding:40px 24px;color:var(--danger);">DOCX 解析失败：' + escapeHtml(err.message || String(err)) + '</div>';
+      });
     }
 
     function protectMath(text) {
@@ -3833,6 +3945,11 @@
 
     // 切换预览/源码模式
     function setPreviewMode(mode) {
+      // DOCX 只读模式：禁止切到源码（源码是空的，没意义）
+      if (currentFileFormat === 'docx' && mode === 'source') {
+        showToast('DOCX 是只读预览，无法切到源码模式');
+        mode = 'preview';
+      }
       previewMode = mode;
       localStorage.setItem(PREVIEW_MODE_KEY, previewMode);
       document.querySelectorAll('.preview-toggle .toggle-btn').forEach(btn => {
@@ -3840,8 +3957,10 @@
       });
       if (mode === 'preview') {
         // V0.12: 修复 setPreviewMode 把 editor 内容清空的 bug
-        // 只有 previewSource 有内容时才用它覆盖 editor（避免空覆盖）
-        if (previewSource.value && previewSource.value.length > 0) {
+        // DOCX 只读：editor 和 previewSource 都应该是空的，不互相同步
+        if (currentFileFormat === 'docx') {
+          // 不动 editor / previewSource
+        } else if (previewSource.value && previewSource.value.length > 0) {
           editor.value = previewSource.value;
         } else {
           // 否则同步 editor → previewSource（让两边都跟 editor 一致）
@@ -3879,6 +3998,11 @@
 
     // 手动保存
     async function saveToLocal() {
+      // DOCX 是只读模式，禁止保存到原文件（会损坏二进制）
+      if (currentFileFormat === 'docx') {
+        showToast('DOCX 是只读预览模式，不能保存到原文件。如需编辑请用 Word 后另存为 Markdown');
+        return;
+      }
       // 1) localStorage 备份
       localStorage.setItem(STORAGE_KEY, editor.value);
       localStorage.setItem(FILENAME_KEY, filenameInput.value);
@@ -3942,29 +4066,7 @@
       if (!window.bridge) return;
       try {
         const result = await window.bridge.call('openFileDialog');
-        if (result && result.path !== undefined) {
-          if (result.path === null) return; // 用户取消
-          editor.value = result.content;
-          const fileName = result.path.split(/[\\/]/).pop();
-          if (fileName) filenameInput.value = fileName;
-          currentFilePath = result.path;
-          currentFileEncoding = result.encoding || 'utf-8';
-          currentFileLineEnding = result.lineEnding || 'lf';
-          updatePathDisplay();
-          currentFileHasFinalNewline = result.hasFinalNewline !== false;
-          // 标记文件格式
-          const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = detectFileFormat(ext);
-          localStorage.setItem(FILEPATH_KEY, result.path);
-          localStorage.setItem(FILENAME_KEY, filenameInput.value);
-          localStorage.setItem(STORAGE_KEY, editor.value);
-          updatePreview();
-          updateCount();
-          updateEncodingDisplay();
-          updateFormatDisplay();
-          refreshOutline();
-          showToast('已打开 ' + result.path + (result.encoding ? ' [' + formatEncodingName(result.encoding) + ']' : ''));
-        }
+        if (result) await applyOpenedFile(result);
       } catch (e) {
         console.error('openFile failed', e);
         showToast('打开失败: ' + (e.message || e), 'error');
@@ -3996,6 +4098,12 @@
     function updateFormatDisplay() {
       const el = document.getElementById('status-format');
       if (!el) return;
+      // DOCX 二进制：固定显示 "DOCX (只读)"
+      if (currentFileFormat === 'docx') {
+        el.textContent = 'DOCX (只读)';
+        updateJsonFormatBtn();
+        return;
+      }
       const name = filenameInput.value.split(/[\\/]/).pop() || '';
       const ext = (name.split('.').pop() || '').toLowerCase();
       const map = {
