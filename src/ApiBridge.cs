@@ -94,6 +94,7 @@ internal sealed class ApiBridge
                 "getInitialFile" => _form.InitialFilePath,
                 "setCurrentFile" => SetCurrentFile(args),
                 "readResource" => ReadResource(args),
+                "associateFileTypes" => AssociateFileTypes(),
                 "getStartupInfo" => GetStartupInfo(),
                 "setTitle" => SetWindowTitle(args),
                 "showInFolder" => ShowInFolder(args),
@@ -689,6 +690,32 @@ internal sealed class ApiBridge
         string? title = args.GetString();
         _form.Invoke(() => _form.SetWindowTitle(title));
         return new { };
+    }
+
+    /// <summary>
+    /// 文件关联（V0.15i）：把 Inkwell 注册到 .md / .markdown / .json 的
+    /// 「打开方式」列表（HKCU，无需管理员）。写入 ProgId + OpenWithProgids；
+    /// 成为系统"默认应用"仍需用户在 设置 → 默认应用 里选一次（Win10/11 限制）。
+    /// 双击打开由 Program.Main 的 args[0] → InitialFilePath → JS getInitialFile 承接。
+    /// </summary>
+    private object AssociateFileTypes()
+    {
+        string exe = Environment.ProcessPath ?? AppContext.BaseDirectory;
+        using (var progId = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes\Inkwell.Document"))
+        {
+            progId.SetValue("", "Inkwell 文档");
+            using (var icon = progId.CreateSubKey("DefaultIcon"))
+                icon.SetValue("", $"{exe},0");
+            using (var cmd = progId.CreateSubKey(@"shell\open\command"))
+                cmd.SetValue("", $"\"{exe}\" \"%1\"");
+        }
+        foreach (var ext in new[] { ".md", ".markdown", ".json" })
+        {
+            using var extKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
+                @"Software\Classes\" + ext + @"\OpenWithProgids");
+            extKey.SetValue("Inkwell.Document", new byte[0], Microsoft.Win32.RegistryValueKind.None);
+        }
+        return new { ok = true };
     }
 
     private object SetCurrentFile(JsonElement args)

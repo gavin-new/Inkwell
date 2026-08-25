@@ -984,6 +984,27 @@
       margin: 0 auto;
       padding: 32px 40px;
     }
+    /* V0.15i: JSON 预览 — 语法高亮配色 */
+    .json-view {
+      flex: 1;
+      overflow: auto;
+      margin: 12px 16px 16px;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.65;
+      white-space: pre;
+      tab-size: 2;
+    }
+    .json-view.json-invalid { outline: 1px solid rgba(255, 59, 48, 0.4); }
+    .json-key { color: #7dcfff; }
+    .json-str { color: #a8e0a0; }
+    .json-num { color: #ffb86c; }
+    .json-bool { color: #c792ea; }
+    .json-null { color: #ff6b81; }
     /* 预览区源码编辑 */
     .preview-source {
       flex: 1;
@@ -1110,11 +1131,11 @@
       background: linear-gradient(90deg, transparent, var(--border), transparent);
       margin: 40px 0;
     }
-    /* 状态栏 - 磨砂。V0.15g: 图标居左 → 路径(弹性) → 数据(靠右) */
+    /* 状态栏 - 磨砂。V0.15i: 三列网格：路径(左) | 磁吸卡开关(居中) | 数据(右) */
     .statusbar {
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      gap: 10px;
       padding: 4px 10px;
       background: rgba(251, 251, 253, 0.72);
       border-top: 1px solid var(--border);
@@ -1129,34 +1150,37 @@
     }
     .statusbar .save-hint { color: var(--accent); opacity: 0; transition: opacity .3s var(--ease); font-weight: 500; }
     .statusbar .save-hint.show { opacity: 1; }
-    /* 左：磁吸卡开关（依次排列在最左侧） */
-    .statusbar-cards {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    /* 中：文档路径，占剩余空间，超长省略 */
+    /* 左：文档路径，超长省略 */
     .statusbar-path {
-      flex: 1;
-      min-width: 0;
+      grid-column: 1;
+      justify-self: start;
+      max-width: 32vw;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       opacity: 0.7;
       cursor: pointer;
+      min-width: 0;
     }
     .statusbar-path:hover {
       opacity: 1;
       color: var(--text);
     }
+    /* 中：磁吸卡开关（真正的水平居中） */
+    .statusbar-cards {
+      grid-column: 2;
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     /* 右：数据 */
     .statusbar-right {
-      margin-left: auto;
+      grid-column: 3;
+      justify-self: end;
       display: flex;
       align-items: center;
       gap: 10px;
-      flex-shrink: 0;
     }
     .statusbar-right .sep {
       width: 1px;
@@ -1826,6 +1850,8 @@
         <span class="dock-grip" data-i18n-title="dockGripTip" title="拖动移动 · 双击复位">⠿</span>
         <button onclick="toggleFullscreen()" data-i18n-title="fullscreen" title="全屏"><svg class="icon"><use href="#icon-maximize"></use></svg></button>
         <button onclick="toggleTheme()" data-i18n-title="theme" title="切换主题"><svg class="icon"><use href="#icon-sun"></use></svg></button>
+        <button onclick="resetAllDocks()" data-i18n-title="resetDocks" title="复位所有工具栏到默认位置"><svg class="icon"><use href="#icon-refresh"></use></svg></button>
+        <button onclick="associateFileTypes()" data-i18n-title="assocBtn" title="文件关联：把 .md / .json 加入「打开方式」"><svg class="icon"><use href="#icon-link"></use></svg></button>
       </div>
     </div>
 
@@ -1835,6 +1861,9 @@
         <div class="pane-header">
           <span class="pane-title" id="current-file-name" data-i18n="editorPaneTitle">编辑</span>
           <span data-i18n="editorPaneHint">支持 Markdown 语法</span>
+          <button class="pane-action" id="json-format-btn" onclick="formatJsonDocument()" data-i18n-title="jsonFormatBtn" title="美化 JSON（格式化缩进）Ctrl+Shift+F" style="display:none;">
+            <svg class="icon icon-sm"><use href="#icon-braces"></use></svg>
+          </button>
         </div>
         <textarea id="editor" data-i18n-placeholder="editorPlaceholder" placeholder="开始输入 Markdown..." spellcheck="false"></textarea>
       </div>
@@ -1892,15 +1921,15 @@
     </div><!-- /workspace -->
 
     <div class="statusbar">
-      <!-- 左：4 张磁吸卡片显隐开关（依次排列在最左侧） -->
+      <!-- 左：当前文档路径（点击在资源管理器中定位文件） -->
+      <div class="statusbar-path" id="status-path" onclick="revealCurrentFile()">未保存</div>
+      <!-- 中：4 张磁吸卡片显隐开关（水平居中） -->
       <div class="statusbar-cards" id="statusbar-cards">
         <span class="status-card" data-card="fileTree" onclick="toggleCard('fileTree')" data-i18n-title="fileTree" title="文件">📁</span>
         <span class="status-card" data-card="outline" onclick="toggleCard('outline')" data-i18n-title="outline" title="大纲">📑</span>
         <span class="status-card" data-card="preview" onclick="toggleCard('preview')" data-i18n-title="previewPaneTitle" title="实时预览">👁</span>
         <span class="status-card" data-card="ai" onclick="toggleCard('ai')" data-i18n-title="aiPaneTitle" title="AI 大模型">🤖</span>
       </div>
-      <!-- 中：当前文档路径（点击在资源管理器中定位文件） -->
-      <div class="statusbar-path" id="status-path" onclick="revealCurrentFile()">未保存</div>
       <!-- 右：文档统计 / 保存状态 / 编码 / 格式 -->
       <div class="statusbar-right" id="statusbar-data">
         <span id="status-chars" title="总字符数（含空白）">0 字符</span>
@@ -2506,7 +2535,7 @@
           updatePathDisplay();
           currentFileHasFinalNewline = result.hasFinalNewline !== false;
           const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
+          currentFileFormat = detectFileFormat(ext);
           activeFilePath = result.path;
           localStorage.setItem(FILEPATH_KEY, result.path);
           localStorage.setItem(FILENAME_KEY, filenameInput.value);
@@ -3157,6 +3186,18 @@
       await initAi();
     })();
 
+    // V0.15i: 文件关联 — 启动参数携带的文件（双击 .md/.json 打开）
+    (async () => {
+      try {
+        if (window.bridge) {
+          const f = await window.bridge.call('getInitialFile');
+          if (f) await openFileFromPath(f);
+        }
+      } catch (e) {
+        console.warn('open initial file failed:', e);
+      }
+    })();
+
     // ========== V0.15 磁吸板：4 张卡片的显隐（中间编辑区固定） ==========
     // 卡片位置：fileTree=左上 outline=左下 preview=右上 ai=右下
     const CARD_LEFT = new Set(['fileTree', 'outline']);
@@ -3226,30 +3267,63 @@
 
     // ========== V0.15g: 可拖动工具 dock ==========
     // 拖左侧把手把某个分组拽成浮动小任务栏，位置存 localStorage；双击把手复位回工具栏
+    // V0.15i: 恢复位置与窗口缩放时钳制回视口，防止 dock 被拖丢看不见
     const DOCK_POS_KEY_PREFIX = 'md_editor_dock_pos_';
     (function initDocks() {
+      // 把浮动 dock 拉回可视区域（窗口缩小/换显示器后位置可能出界）
+      function clampDock(dock) {
+        if (!dock.classList.contains('floating')) return;
+        const x = parseFloat(dock.style.left) || 0;
+        const y = parseFloat(dock.style.top) || 0;
+        const maxX = Math.max(0, window.innerWidth - dock.offsetWidth);
+        const maxY = Math.max(0, window.innerHeight - 30);
+        const nx = Math.min(Math.max(0, x), maxX);
+        const ny = Math.min(Math.max(0, y), maxY);
+        if (nx !== x || ny !== y) {
+          dock.style.left = nx + 'px';
+          dock.style.top = ny + 'px';
+          try { localStorage.setItem(DOCK_POS_KEY_PREFIX + dock.dataset.dock, JSON.stringify({ x: nx, y: ny })); } catch {}
+        }
+      }
+      window.clampAllDocks = () => document.querySelectorAll('.tool-dock.floating').forEach(clampDock);
+      window.addEventListener('resize', window.clampAllDocks);
+
       function makeFloating(dock, x, y) {
+        // 关键：dock 平时在 .tool-docks 容器内，该容器的 backdrop-filter（毛玻璃）
+        // 会让 position:fixed 退化为相对容器定位。浮动前先移到 body 下，
+        // 并记住原位置以便复位时放回。
+        if (dock.parentElement !== document.body) {
+          dock.__homeParent = dock.parentElement;
+          dock.__homeNext = dock.nextSibling;
+          document.body.appendChild(dock);
+        }
         dock.classList.add('floating');
         dock.style.left = x + 'px';
         dock.style.top = y + 'px';
       }
+      function dockReset(dock) {
+        try { localStorage.removeItem(DOCK_POS_KEY_PREFIX + dock.dataset.dock); } catch {}
+        dock.classList.remove('floating');
+        dock.style.left = dock.style.top = dock.style.position = '';
+        if (dock.__homeParent) {
+          dock.__homeParent.insertBefore(dock, dock.__homeNext || null);
+          dock.__homeParent = null; dock.__homeNext = null;
+        }
+      }
       document.querySelectorAll('.tool-dock').forEach(dock => {
         const name = dock.dataset.dock;
-        // 恢复上次拖放的位置
+        // 恢复上次拖放的位置（并钳制回视口）
         try {
           const saved = JSON.parse(localStorage.getItem(DOCK_POS_KEY_PREFIX + name) || 'null');
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
             makeFloating(dock, saved.x, saved.y);
+            clampDock(dock);
           }
         } catch {}
         const grip = dock.querySelector('.dock-grip');
         if (!grip) return;
         // 双击复位
-        grip.addEventListener('dblclick', () => {
-          try { localStorage.removeItem(DOCK_POS_KEY_PREFIX + name); } catch {}
-          dock.classList.remove('floating');
-          dock.style.left = dock.style.top = dock.style.position = '';
-        });
+        grip.addEventListener('dblclick', () => dockReset(dock));
         // 指针拖拽：移动超过 4px 才转浮动，避免误触
         grip.addEventListener('pointerdown', (e) => {
           e.preventDefault();
@@ -3287,6 +3361,35 @@
         });
       });
     })();
+
+    // 一键复位所有浮动工具栏（看不见 dock 时的逃生通道）
+    function resetAllDocks() {
+      document.querySelectorAll('.tool-dock.floating').forEach(dock => {
+        try { localStorage.removeItem(DOCK_POS_KEY_PREFIX + dock.dataset.dock); } catch {}
+        dock.classList.remove('floating');
+        dock.style.left = dock.style.top = dock.style.position = '';
+        if (dock.__homeParent) {
+          dock.__homeParent.insertBefore(dock, dock.__homeNext || null);
+          dock.__homeParent = null; dock.__homeNext = null;
+        }
+      });
+      showToast(t('docksReset'), 'success');
+    }
+
+    // 文件关联：把 .md/.markdown/.json 加入系统「打开方式」列表
+    async function associateFileTypes() {
+      if (!window.bridge) {
+        showToast(t('bridgeUnavailable'), 'error');
+        return;
+      }
+      try {
+        const r = await window.bridge.call('associateFileTypes');
+        if (r && r.ok) showToast(t('assocDone'), 'success');
+        else showToast(t('assocFailed'), 'error');
+      } catch (e) {
+        showToast(t('assocFailed') + ': ' + (e.message || e), 'error');
+      }
+    }
 
     function applySplit() {
       // V0.15h: 左列宽度走 workspace flex；编辑区 grid 为 3 列（1fr | splitter | 右列）。
@@ -3564,6 +3667,11 @@
 
     // 渲染预览
     function updatePreview() {
+      // JSON 文档：校验 + 格式化 + 语法高亮（V0.15i）
+      if (currentFileFormat === 'json') {
+        renderJsonPreview();
+        return;
+      }
       // 纯文本 / 其他笔记格式 → 显示原始文本（避免误用 Markdown 渲染破坏内容）
       if (currentFileFormat === 'plain') {
         const ext = (filenameInput.value.split('.').pop() || '').toUpperCase();
@@ -3808,7 +3916,7 @@
           updatePathDisplay();
           // 更新文件格式
           const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
+          currentFileFormat = detectFileFormat(ext);
           currentFileLineEnding = result.lineEnding || currentFileLineEnding;
           currentFileHasFinalNewline = result.hasFinalNewline !== false;
           localStorage.setItem(FILENAME_KEY, filenameInput.value);
@@ -3840,7 +3948,7 @@
           currentFileHasFinalNewline = result.hasFinalNewline !== false;
           // 标记文件格式
           const ext = (fileName.split('.').pop() || '').toLowerCase();
-          currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
+          currentFileFormat = detectFileFormat(ext);
           localStorage.setItem(FILEPATH_KEY, result.path);
           localStorage.setItem(FILENAME_KEY, filenameInput.value);
           localStorage.setItem(STORAGE_KEY, editor.value);
@@ -3886,6 +3994,7 @@
       const ext = (name.split('.').pop() || '').toLowerCase();
       const map = {
         'md': 'Markdown', 'markdown': 'Markdown', 'mdown': 'Markdown', 'mkd': 'Markdown',
+        'json': 'JSON', 'geojson': 'JSON', 'jsonc': 'JSON',
         'txt': '纯文本',
         'csv': 'CSV',
         'adoc': 'AsciiDoc',
@@ -3898,6 +4007,7 @@
         'tex': 'LaTeX',
       };
       el.textContent = map[ext] || (ext ? ext.toUpperCase() : 'Markdown');
+      updateJsonFormatBtn();   // JSON 模式下显示编辑器头部「美化」按钮
     }
 
     // 重新打开当前文件（手动选编码）
@@ -4292,7 +4402,8 @@ ${'</scr' + 'ipt>'}
         filenameInput.value = file.name;
         // 标记文件格式（用于决定预览行为）
         const ext = (file.name.split('.').pop() || '').toLowerCase();
-        currentFileFormat = isMarkdownExt(ext) ? 'md' : 'plain';
+        currentFileFormat = detectFileFormat(ext);
+        updateFormatDisplay();
         updatePreview();
         updateCount();
         saveToLocal();
@@ -4301,11 +4412,79 @@ ${'</scr' + 'ipt>'}
       reader.readAsText(file);
     }
 
-    // 当前文件格式：'md'（Markdown）或 'plain'（纯文本 / 其他）
+    // 当前文件格式：'md'（Markdown）/ 'json'（JSON 高亮）/ 'plain'（纯文本 / 其他）
     let currentFileFormat = 'md';
+
+    // ========== V0.15i: JSON 阅读与编辑 ==========
+    // 预览：校验 → 格式化 → 语法高亮；解析失败显示错误位置与原始文本
+    function renderJsonPreview() {
+      const text = editor.value;
+      const banner = (icon, msg, color) =>
+        '<div style="padding:14px 24px 0;color:' + color + ';font-size:13px;font-weight:600;">' + icon + ' ' + msg + '</div>';
+      try {
+        const parsed = JSON.parse(text);
+        const pretty = JSON.stringify(parsed, null, 2);
+        preview.innerHTML =
+          banner('📋', t('jsonPreviewHint'), 'var(--text-muted)') +
+          '<pre class="json-view">' + highlightJson(pretty) + '</pre>';
+      } catch (e) {
+        preview.innerHTML =
+          banner('⚠️ ' + t('jsonInvalidTitle'), escapeHtml(String(e.message || e)), 'var(--danger)') +
+          '<pre class="json-view json-invalid">' + highlightJson(text) + '</pre>';
+      }
+    }
+
+    // 极简 JSON 语法高亮：键/字符串/数字/布尔/null（无第三方库依赖）
+    function highlightJson(src) {
+      const esc = String(src).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return esc.replace(
+        /(&quot;(?:\\.|[^&\\]|&(?!quot;))*&quot;|"([^"\\]|\\.)*"(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+        (m) => {
+          let cls = 'json-num';
+          if (m.startsWith('&quot;') || m.startsWith('"')) cls = /:\s*$/.test(m) ? 'json-key' : 'json-str';
+          else if (m === 'true' || m === 'false') cls = 'json-bool';
+          else if (m === 'null') cls = 'json-null';
+          return '<span class="' + cls + '">' + m + '</span>';
+        });
+    }
+
+    // 编辑器一键美化（工具按钮 / Ctrl+Shift+F）
+    async function formatJsonDocument() {
+      if (currentFileFormat !== 'json') return;
+      try {
+        const parsed = JSON.parse(editor.value);
+        const pretty = JSON.stringify(parsed, null, 2);
+        if (pretty !== editor.value) {
+          pushHistory();
+          editor.value = pretty;
+          updatePreview();
+          updateCount();
+          autoSave();
+          showToast(t('jsonFormatted'), 'success');
+        } else {
+          showToast(t('jsonAlreadyFormatted'), 'info');
+        }
+      } catch (e) {
+        showToast(t('jsonInvalidTitle') + ': ' + (e.message || e), 'error');
+      }
+    }
+
+    // JSON 模式下显示编辑器头部的「美化」按钮
+    function updateJsonFormatBtn() {
+      const btn = document.getElementById('json-format-btn');
+      if (btn) btn.style.display = currentFileFormat === 'json' ? '' : 'none';
+    }
+
 
     function isMarkdownExt(ext) {
       return ext === 'md' || ext === 'markdown' || ext === 'mdown' || ext === 'mkd';
+    }
+
+    // V0.15i: 文件格式三态判定 — 'md'（Markdown 渲染）/ 'json'（高亮+格式化）/ 'plain'
+    function detectFileFormat(ext) {
+      if (isMarkdownExt(ext)) return 'md';
+      if (ext === 'json' || ext === 'geojson' || ext === 'jsonc') return 'json';
+      return 'plain';
     }
 
     // 导入文件
@@ -5380,7 +5559,7 @@ ${'</scr' + 'ipt>'}
     filenameInput.addEventListener('input', () => {
       // 同步文件格式标记
       const ext = (filenameInput.value.split('.').pop() || '').toLowerCase();
-      const newFormat = isMarkdownExt(ext) ? 'md' : 'plain';
+      const newFormat = detectFileFormat(ext);
       if (newFormat !== currentFileFormat) {
         currentFileFormat = newFormat;
         updatePreview();
@@ -5498,6 +5677,10 @@ ${'</scr' + 'ipt>'}
         } else if (e.shiftKey && (e.key === 'K')) {
           e.preventDefault();
           openImageModal();
+        } else if (e.shiftKey && (e.key === 'F')) {
+          // V0.15i: JSON 美化
+          e.preventDefault();
+          formatJsonDocument();
         } else if (e.key === 'f') {
           e.preventDefault();
           openFindModal();

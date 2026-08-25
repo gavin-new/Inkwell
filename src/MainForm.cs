@@ -50,7 +50,11 @@ public sealed class MainForm : Form
     // V0.15h: 25（布局重构：左列与任务栏同顶对齐；撤销组移至任务栏右侧；文件名栏移到右上角）
     //         26（修复 .pane 的 flex:1 导致左列抢占 workspace 空间）
     //         27（文件名栏移到按钮组之后的最右上角；左列宽度用高特异性选择器锁定）
-    private const string ResourcesVersion = "27";
+    // V0.15i: 28（状态栏图标回中；JSON 阅读编辑支持；文件关联；
+    //         dock 视口钳制防拖丢 + 一键复位）
+    //         29（修复浮动 dock 的 fixed 定位被 .tool-docks 的 backdrop-filter
+    //            劫持：浮动时移挂 body，复位时放回原容器）
+    private const string ResourcesVersion = "29";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
