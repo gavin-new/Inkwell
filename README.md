@@ -3,122 +3,73 @@
 ![License](https://img.shields.io/badge/License-NonCommercial-red)
 ![Size](https://img.shields.io/badge/体积-3MB_单文件-success)
 ![Platform](https://img.shields.io/badge/平台-Windows_10%2B-lightgrey)
-![Version](https://img.shields.io/badge/版本-v0.11a-orange)
+![Version](https://img.shields.io/badge/版本-v0.15-orange)
 
-> **单文件 3 MB · 完全离线 · 数据不出本地** 的 Markdown 写作工作台
-> 3 列 5 区布局 · 内置 6 家 AI 大模型 · 选中即改
+> **单文件 3 MB · 完全离线 · 数据不出本地**
+> Markdown / JSON 写作工作台 · 内置 6 家 AI 大模型 · 选中即改
 
-一个 EXE 搞定所有事：不用安装、不用登录、不用联网，你的文档永远是本地纯文本文件。
-需要 AI 时，选中一段文字点一下，润色 / 翻译 / 续写 / 总结流式写入——所见即所得。
-
----
-
-## 📸 主界面
-
-![Inkwell 主界面](docs/screenshots/v011a-main.png)
+![Inkwell 主界面](docs/screenshots/v015-main.png)
 
 ---
 
-## ✨ 核心功能
+## 🪶 有多便捷
 
-### 🤖 AI 选区编辑 — 最顺手的功能
+- **下载即用** — 就是一个 `Inkwell.exe`，无需安装、无需登录、无需联网，放 U 盘里也能跑
+- **双击文件直接打开** — 软件内点一下 🔗 即可关联系统，之后 `.md` / `.json` 双击就进编辑
+- **数据永远是本地文件** — 不上云、不进数据库，随时用 VS Code / 记事本 / Git 接手，无锁定
+- **界面跟着你变** — 4 张功能卡片随意显隐、6 组工具坞可拖成浮动工具条、
+  面板比例全部记忆，下次启动原样恢复
+- **中文界面** — 中英双语一键切换，提示、帮助、快捷键全套本地化
 
-选中一段文字 → 工具栏点对应按钮 → AI 结果**流式替换选区**：
+## 📂 支持的格式
 
-- **✨ 润色** — 更流畅、更专业的措辞
-- **🌐 翻译** — 中 ↔ 英自动判断方向
-- **📝 续写** — 顺着你的风格写下去
-- **📋 总结** — 压缩为简洁摘要
+**读写编辑**（自动检测编码，老文件不乱码；行尾符 CRLF / LF 原样保留）：
 
-替换完不满意？`Ctrl+Z` 一键回到原文。
+`.md` `.markdown` `.json` `.geojson` `.txt` `.csv` `.py` `.js` `.ts`
+`.yaml` `.yml` `.toml` `.xml` `.html` `.css` `.sh` `.ps1` `.adoc`
+`.rst` `.org` `.rtf` `.textile` `.mediawiki` `.opml` `.tex` ……（25+ 种）
 
-**多厂商开箱即用**，不锁任何一家：
+**其中两种有专属模式**：
 
-| 服务商 | 适用场景 |
+| 格式 | 专属体验 |
 |---|---|
-| **OpenAI** | gpt-4o-mini、gpt-4o 等 |
-| **DeepSeek** | 国内可用、价格低 |
-| **智谱 GLM** | glm-4-flash 等 |
-| **通义千问** | qwen-turbo 等 |
-| **Kimi 月之暗面** | 长文本 |
-| **本地 Ollama** | 隐私优先、零成本 |
-| **自定义** | OneAPI / LiteLLM / Open WebUI 等代理 |
+| **Markdown** | 实时预览（KaTeX 公式 / Mermaid 图表）、大纲跳转、全格式导出 |
+| **JSON** | 预览自动校验 + 格式化 + 语法高亮，`Ctrl+Shift+F` 一键美化 |
 
-除选区编辑外，右下角还有** AI 自由对话**面板，聊天、解释概念、问问题都顺手。
+**编码支持**：UTF-8 / UTF-8 BOM / UTF-16 LE/BE / GB18030 / Shift-JIS，打开旧文件或他人传的文件不乱码，可手动指定编码重开。
 
-### 🗂️ 写作工作台 — 不只是编辑器
+## ✍️ 能做什么
 
-- **3 列 5 区布局** — 文件树 / 大纲 / 编辑 / 预览 / AI，各区可折叠、比例可调、记忆到下次启动
-- **文件树** — 打开文件夹，整套 Markdown 工程一起管
-- **大纲面板** — 自动解析 H1-H6，点击跳转，编辑时高亮跟随
-- **实时预览** — 渲染 / 源码双模式，数学公式（KaTeX）、Mermaid 图表直接渲染
+**写作**
+- 所见即所得：左侧写 Markdown，右侧实时渲染；大纲自动生成，点击跳转
+- 有序 / 任务列表自动编号续号，标题、表格、代码块、公式、图表一键插入
+- 撤销重做完整历史，`Ctrl+Z` 随时回退
 
-### 🔧 工程级细节
+**AI 辅助**（可选，配好 Key 即用）
+- 选中文字 → 润色 / 翻译（中↔英）/ 续写 / 总结，结果流式写入选区，不满意 Ctrl+Z
+- 右下角 AI 对话面板：OpenAI / DeepSeek / 智谱 GLM / 通义千问 / Kimi / 本地 Ollama / 自定义端点
 
-- **25+ 文件格式** — `.md` `.txt` `.csv` `.py` `.adoc` `.rst` `.org` `.tex` `.js` `.ts` `.json` `.yaml` `.toml` ……
-- **多编码自动检测** — UTF-8 / UTF-8 BOM / UTF-16 / GB18030 / Shift-JIS，老文件不乱码
-- **保留行尾符** — 改 Python/JS 文件时 CRLF / LF / 末尾换行原样写回
-- **剪贴板贴图** — `Ctrl+V` 直接插入截图，自动存到 `assets/`
-- **多格式导出** — Markdown / Word / HTML / PDF / PNG 长图
-- **网页转 Markdown** — 把 URL 内容抓成 .md 存档
+**图片**
+- `Ctrl+V` 直接粘贴截图，自动存到文档旁的 `assets/`
+- 拖拽图片文件进窗口即插入；其他工具（Typora 等）写的相对路径图片正常预览
 
-### 🎨 视觉设计
+**文件管理**
+- 打开文件夹成套管理文档工程（文件树）
+- 状态栏显示当前文档完整路径，点击在资源管理器中定位
+- 网页转 Markdown：输入网址抓取正文存档
 
-- 现代毛玻璃风格，明暗双主题跟随系统
-- 浮动卡片布局，视觉聚焦
-- 中英双语界面
+**导出** — Markdown / Word (.doc) / HTML（独立页面）/ PDF（打印另存）/ PNG 长图（多比例）
 
----
+## 💻 运行环境
 
-## 🏆 为什么是 Inkwell
-
-| | 常见方案 | Inkwell |
+| 项目 | 要求 | 说明 |
 |---|---|---|
-| 安装 | 装 Node / VS Code / 扩展 | 下载 EXE，双击运行 |
-| 体积 | 数百 MB | **3 MB** 单文件 |
-| 数据 | 云端或浏览器存储 | **本地文件**，随时用其他工具打开 |
-| AI | 锁定单一订阅 | 6 厂商 + 本地 Ollama + 自定义端点 |
+| 操作系统 | Windows 10 1809+ / Windows 11 | 64 位 |
+| .NET 10 Desktop Runtime | 需要 | 首次运行缺失会弹窗引导下载安装（约 50 MB，一次性） |
+| WebView2 Runtime | 需要 | Win11 自带；Win10 缺失时同样弹窗引导（约 100 MB，一次性） |
 
-适合个人写作者、博主、学生、程序员写文档；不适合需要多人实时协作或云同步的场景（建议用 Git / Syncthing 自行同步）。
-
----
-
-## 🚀 快速开始
-
-### 安装
-
-1. 从 [GitHub Releases](https://github.com/gavin-new/Inkwell/releases/latest) 下载 `Inkwell.exe`（约 3 MB）
-2. 双击运行，**第一次**会弹出 .NET 10 / WebView2 Runtime 检测（缺哪个装哪个，一次性）
-3. 开始写
-
-系统要求：Windows 10 1809+ / Windows 11 · .NET 10 Desktop Runtime · WebView2 Runtime（Win11 必带）
-
-### 配置 AI（可选，不配不影响其他功能）
-
-1. 右下角 AI 面板点齿轮 ⚙
-2. 选服务商（自动填 baseUrl 和默认模型）
-3. 填 API Key → 测试连接 → 保存
-4. 配置存到 `~/.Inkwell/ai-config.json`，下次启动自动加载
-
-### 常用快捷键
-
-| 操作 | 快捷键 |
-|---|---|
-| 保存 | `Ctrl+S` |
-| 加粗 / 斜体 / 下划线 | `Ctrl+B` / `Ctrl+I` / `Ctrl+U` |
-| 查找 / 替换 | `Ctrl+F` / `Ctrl+H` |
-| 插入链接 / 图片 | `Ctrl+K` / `Ctrl+Shift+K` |
-| 撤销 / 重做 | `Ctrl+Z` / `Ctrl+Y` |
-| AI 选区润色 / 翻译 | 选中文本 → 工具栏 AI 按钮 |
-
----
-
-## 🛠️ 技术栈
-
-- **C# / .NET 10 / WinForms** — 原生 Windows 外壳
-- **WebView2 (Edge 内核)** — 现代 Web 渲染，无浏览器依赖
-- **HTML / CSS / JavaScript** — 纯 Web 标准前端，无构建步骤
-- **marked + KaTeX + Mermaid** — Markdown / 公式 / 图表
+- 下载：[GitHub Releases](https://github.com/gavin-new/Inkwell/releases/latest) → `Inkwell.exe`（约 3 MB）
+- 配置与缓存存放于 `%LOCALAPPDATA%\Inkwell` 和 `~/.Inkwell`，卸载删文件即干净
 
 ---
 
@@ -132,4 +83,4 @@
 
 ---
 
-**Inkwell Ver 0.11a** — 你的下一篇文章，从这里开始。
+**Inkwell Ver 0.15** — 你的下一篇文章，从这里开始。
