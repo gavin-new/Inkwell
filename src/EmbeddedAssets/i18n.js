@@ -165,9 +165,9 @@ const i18n = {
     statusNoMatch: '未找到匹配项',
     statusFoundMatch: '✓ 已找到',
 
-    // V0.11: 文件树 + 大纲
-    fileTree: '文件',
-    fileTreeEmpty: '点击 📁 打开文件夹',
+    // V0.11: 文件树 + 大纲（V0.16b: 卡片名改为"工作区"，更精准反映语义：永远只显示工作区根目录的扁平列表）
+    fileTree: '工作区',
+    fileTreeEmpty: '点击 📁 打开工作区',
     refresh: '刷新',
     openFolder: '打开文件夹',
     closeWorkspace: '关闭工作区',
@@ -329,7 +329,7 @@ mindmap
       <p><b>快速上手</b></p>
       <ul>
         <li>在左侧输入 Markdown，右侧同步渲染。</li>
-        <li>状态栏中间的 📁 📑 👁 🤖 按钮可显示 / 隐藏文件树、大纲、预览、AI 四张卡片，卡片挪走后编辑区自动扩展。</li>
+        <li>状态栏中间的 📁 📑 👁 🤖 按钮可显示 / 隐藏工作区、大纲、预览、AI 四张卡片，卡片挪走后编辑区自动扩展。</li>
         <li>选中文字点工具栏按钮（或 AI 按钮）可快速包裹、替换选区。</li>
       </ul>
       <p><b>常用快捷键</b>：<code>Ctrl+S</code> 保存，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y</code> 重做。</p>
@@ -351,8 +351,8 @@ mindmap
     sourceTab: 'Source',
 
     // V0.13: AI (multi-provider, OpenAI-compatible + Ollama)
-    fileTree: 'Files',
-    fileTreeEmpty: 'Click 📁 to open a folder',
+    fileTree: 'Workspace',
+    fileTreeEmpty: 'Click 📁 to open a workspace folder',
     refresh: 'Refresh',
     openFolder: 'Open folder',
     closeWorkspace: 'Close workspace',

@@ -90,6 +90,7 @@ internal sealed class ApiBridge
                 "pickSavePath" => await PickSavePath(args),
                 "pickOpenPath" => await PickOpenPath(args),
                 "confirm" => ConfirmDialog(args),
+                "confirm3" => ConfirmDialog3(args),
                 "alert" => AlertDialog(args),
                 "prompt" => PromptDialog(args),
                 "getInitialFile" => _form.InitialFilePath,
@@ -664,6 +665,32 @@ internal sealed class ApiBridge
             var r = MessageBox.Show(_form, message, title ?? "Inkwell",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
             tcs.SetResult(r == DialogResult.Yes);
+        });
+        return tcs.Task.GetAwaiter().GetResult();
+    }
+
+    // V0.16c: 三按钮对话框（保存/放弃/取消）— 用 MessageBox YesNoCancel
+    // 返回字符串 "save" / "discard" / "cancel"
+    private string ConfirmDialog3(JsonElement args)
+    {
+        string message = args[0].GetString() ?? "";
+        string? title = args[1].ValueKind == JsonValueKind.String ? args[1].GetString() : null;
+        string btnSave   = args[2].ValueKind == JsonValueKind.String ? args[2].GetString() ?? "保存" : "保存";
+        string btnDiscard = args[3].ValueKind == JsonValueKind.String ? args[3].GetString() ?? "放弃" : "放弃";
+        string btnCancel = args[4].ValueKind == JsonValueKind.String ? args[4].GetString() ?? "取消" : "取消";
+        var tcs = new TaskCompletionSource<string>();
+        _form.Invoke(() =>
+        {
+            // 用自定义按钮的 MessageBox 不可行；改用 YesNoCancel，标签写到 message 里
+            string fullMessage = $"{message}\n\n是({btnSave}) / 否({btnDiscard}) / 取消({btnCancel})";
+            var r = MessageBox.Show(_form, fullMessage, title ?? "关闭文档",
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+            switch (r)
+            {
+                case DialogResult.Yes:    tcs.SetResult("save"); break;
+                case DialogResult.No:     tcs.SetResult("discard"); break;
+                default:                  tcs.SetResult("cancel"); break;
+            }
         });
         return tcs.Task.GetAwaiter().GetResult();
     }

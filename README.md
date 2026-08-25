@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/License-NonCommercial-red)
 ![Size](https://img.shields.io/badge/体积-3MB_单文件-success)
 ![Platform](https://img.shields.io/badge/平台-Windows_10%2B-lightgrey)
-![Version](https://img.shields.io/badge/版本-v0.15-orange)
+![Version](https://img.shields.io/badge/版本-v0.16c-orange)
 
 > **单文件 3 MB · 完全离线 · 数据不出本地**
 > Markdown / JSON 写作工作台 · 内置 6 家 AI 大模型 · 选中即改

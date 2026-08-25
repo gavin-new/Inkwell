@@ -1,6 +1,6 @@
 // =============================================================================
 //  Inkwell — A single-file Markdown editor for Windows
-//  Version: v0.15
+//  Version: v0.16c
 //  Original release: Ver 0.10
 //  Author:  Gavin (gavin.zhang815@gmail.com)
 //  License: MIT — see LICENSE in the repository root
@@ -27,7 +27,7 @@ public sealed class MainForm : Form
 
     private const string VirtualHost = "app.local";
     // 产品版本号：窗口标题与 about 显示（改这里即可全局同步）
-    public const string ProductVersion = "v0.15";
+    public const string ProductVersion = "v0.16c";
     // V0.12: wwwroot 放到 %LocalAppData%\Inkwell\wwwroot（不污染 EXE 所在目录，
     //        避免绿色版 / 便携版用户在桌面上看到一堆解压文件）
     private static readonly string AppDataDir = Path.Combine(
@@ -61,7 +61,7 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    private const string ResourcesVersion = "32";
+    private const string ResourcesVersion = "34";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
