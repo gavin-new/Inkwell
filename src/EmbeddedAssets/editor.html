@@ -1005,52 +1005,7 @@
     .json-num { color: #ffb86c; }
     .json-bool { color: #c792ea; }
     .json-null { color: #ff6b81; }
-    /* 预览区源码编辑 */
-    .preview-source {
-      flex: 1;
-      width: 100%;
-      padding: 28px 32px;
-      border: none;
-      outline: none;
-      resize: none;
-      display: none;
-      font-family: var(--font-mono);
-      font-size: 15px;
-      line-height: 1.7;
-      background: var(--panel-bg);
-      color: var(--text);
-      caret-color: var(--accent);
-      tab-size: 4;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .preview-toggle {
-      display: flex;
-      gap: 4px;
-      padding: 3px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-    }
-    .toggle-btn {
-      padding: 3px 12px;
-      border: none;
-      border-radius: 5px;
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all .15s var(--ease);
-    }
-    .toggle-btn.active {
-      background: var(--panel-bg);
-      color: var(--accent);
-      box-shadow: var(--shadow-sm);
-    }
-    .toggle-btn:hover:not(.active) {
-      color: var(--accent);
-    }
+    /* V0.16e: 删除了源码模式，preview-source/preview-toggle/toggle-btn CSS 不再需要 */
     /* Markdown 预览样式 */
     .preview-content h1, .preview-content h2, .preview-content h3,
     .preview-content h4, .preview-content h5, .preview-content h6 {
@@ -1617,8 +1572,8 @@
     /* 打印 / 导出 PDF */
     @media print {
       .top-bar, .tool-docks, .statusbar, .editor-pane, .resizer, .resizer-h,
-      .left-pane, .right-pane, .preview-toggle, .word-count-wrap,
-      .preview-source, .modal-overlay, .toast, .icon-sprite {
+      .left-pane, .right-pane, .word-count-wrap,
+      .modal-overlay, .toast, .icon-sprite {
         display: none !important;
       }
       .preview-content {
@@ -1879,17 +1834,12 @@
         <div class="right-pane-top">
           <div class="pane-header">
             <span class="pane-title" data-i18n="previewPaneTitle">实时预览</span>
-            <div class="preview-toggle">
-              <button class="toggle-btn active" data-mode="preview" onclick="setPreviewMode('preview')" data-i18n="previewTab">预览</button>
-              <button class="toggle-btn" data-mode="source" onclick="setPreviewMode('source')" data-i18n="sourceTab">源码</button>
-            </div>
             <span id="word-count">0 字</span>
             <button class="pane-action" id="preview-collapse-btn" onclick="toggleCard('preview')" data-i18n-title="collapsePane" title="收起预览卡片" data-pane="preview">
               <svg class="icon icon-sm collapse-icon"><use href="#icon-chevron-up"></use></svg>
             </button>
           </div>
           <div class="preview-content" id="preview"></div>
-          <textarea id="preview-source" class="preview-source" data-i18n-placeholder="previewSourcePlaceholder" placeholder="在此编辑 Markdown 源码..." spellcheck="false"></textarea>
         </div>
         <div class="resizer-h" id="resizer-ai" title="拖动调整预览/AI 比例"></div>
         <div class="right-pane-bottom">
@@ -2238,7 +2188,6 @@
   <script>
     const editor = document.getElementById('editor');
     const preview = document.getElementById('preview');
-    const previewSource = document.getElementById('preview-source');
     const filenameInput = document.getElementById('filename');
     const wordCount = document.getElementById('word-count');
     const saveHint = document.getElementById('save-hint');
@@ -2265,7 +2214,6 @@
     // workspaceRoots: [{path, name}] — VS Code 风格多根工作区
     let workspaceRoots = [];
 
-    let previewMode = 'preview';
     let currentLang = 'zh-CN';
 
     function t(key, ...args) {
@@ -2748,15 +2696,12 @@
         activeTabPath = null;
         currentFilePath = null;
         editor.value = '';
-        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
         currentDocxBase64 = '';
         currentFileFormat = 'md';
         filenameInput.value = t('filenameDefault');
         document.getElementById('current-file-name').textContent = t('editorPaneTitle');
         editor.removeAttribute('readonly');
         editor.classList.remove('editor-readonly');
-        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
-        if (srcBtn) srcBtn.style.display = '';
         renderTabs();
         updatePreview(); updateCount(); updateEditorStats();
         updateEncodingDisplay(); updateFormatDisplay();
@@ -2768,7 +2713,6 @@
       if (activeTabPath && activeTabPath !== path && openTabs.has(activeTabPath)) {
         const cur = openTabs.get(activeTabPath);
         cur.content = editor.value;
-        if (typeof previewSource !== 'undefined' && previewSource) cur.content = cur.format === 'docx' ? '' : cur.content;
         cur.docxBase64 = currentDocxBase64 || cur.docxBase64;
         cur.dirty = (cur.content !== cur.lastSavedContent) || (cur.docxBase64 !== cur.lastSavedDocxBase64);
       }
@@ -2784,19 +2728,12 @@
       // editor 内容
       if (tab.format === 'docx') {
         editor.value = '';
-        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
         editor.setAttribute('readonly', 'readonly');
         editor.classList.add('editor-readonly');
-        if (typeof setPreviewMode === 'function') setPreviewMode('preview');
-        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
-        if (srcBtn) srcBtn.style.display = 'none';
       } else {
         editor.value = tab.content || '';
-        if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = tab.content || '';
         editor.removeAttribute('readonly');
         editor.classList.remove('editor-readonly');
-        const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
-        if (srcBtn) srcBtn.style.display = '';
       }
       // 文件名 + UI
       filenameInput.value = tab.fileName;
@@ -2945,13 +2882,10 @@
           filenameInput.value = t('filenameDefault');
           document.getElementById('current-file-name').textContent = t('editorPaneTitle');
           editor.value = '';
-          if (typeof previewSource !== 'undefined' && previewSource) previewSource.value = '';
           currentDocxBase64 = '';
           currentFileFormat = 'md';
           editor.removeAttribute('readonly');
           editor.classList.remove('editor-readonly');
-          const srcBtn = document.querySelector('.preview-toggle .toggle-btn[data-mode="source"]');
-          if (srcBtn) srcBtn.style.display = '';
           updatePreview(); updateCount(); updateEditorStats();
           updateEncodingDisplay(); updateFormatDisplay();
           updatePathDisplay();
@@ -4138,12 +4072,12 @@
       });
       tryRun('preview', () => { updatePreview(); updateCount(); });
       tryRun('cardsVisible', () => applyCardsVisibility());
-      tryRun('previewMode', () => {
-        const savedPreviewMode = localStorage.getItem(PREVIEW_MODE_KEY);
-        if (savedPreviewMode === 'preview' || savedPreviewMode === 'source') {
-          previewMode = savedPreviewMode;
+      // V0.16e: 删除了源码模式，previewMode 始终为 'preview'，无需恢复 localStorage
+      tryRun('previewModeCompat', () => {
+        // 兼容旧版 localStorage：清掉 source 模式（防止老用户被卡）
+        if (localStorage.getItem(PREVIEW_MODE_KEY) === 'source') {
+          localStorage.setItem(PREVIEW_MODE_KEY, 'preview');
         }
-        setPreviewMode(previewMode);
       });
       tryRun('history', () => {
         historyStack = [editor.value];
@@ -4553,39 +4487,14 @@
     }
 
     // 切换预览/源码模式
+    // V0.16e: 删除了源码模式（左侧编辑器已能编辑 markdown 源码，右侧预览重复且无意义）
+    // 保留此函数以防兼容旧调用（强制 'preview' 模式）
     function setPreviewMode(mode) {
-      // DOCX 只读模式：禁止切到源码（源码是空的，没意义）
-      if (currentFileFormat === 'docx' && mode === 'source') {
-        showToast('DOCX 是只读预览，无法切到源码模式');
-        mode = 'preview';
-      }
-      previewMode = mode;
-      localStorage.setItem(PREVIEW_MODE_KEY, previewMode);
-      document.querySelectorAll('.preview-toggle .toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-      });
-      if (mode === 'preview') {
-        // V0.12: 修复 setPreviewMode 把 editor 内容清空的 bug
-        // DOCX 只读：editor 和 previewSource 都应该是空的，不互相同步
-        if (currentFileFormat === 'docx') {
-          // 不动 editor / previewSource
-        } else if (previewSource.value && previewSource.value.length > 0) {
-          editor.value = previewSource.value;
-        } else {
-          // 否则同步 editor → previewSource（让两边都跟 editor 一致）
-          previewSource.value = editor.value;
-        }
-        preview.style.display = '';
-        previewSource.style.display = 'none';
-        updatePreview();
-        updateCount();
-        autoSave();
-      } else {
-        previewSource.value = editor.value;
-        preview.style.display = 'none';
-        previewSource.style.display = 'block';
-        previewSource.focus();
-      }
+      localStorage.setItem(PREVIEW_MODE_KEY, 'preview');
+      preview.style.display = '';
+      updatePreview();
+      updateCount();
+      autoSave();
     }
 
     // 自动保存
@@ -5038,14 +4947,10 @@ ${'</scr' + 'ipt>'}
     }
 
     function exportPDF() {
-      const wasSource = previewMode === 'source';
-      if (wasSource) {
-        setPreviewMode('preview');
-      }
+      // V0.16e: 删除了源码模式，无需切到 preview 再切回
       showToast(t('toastChoosePdf'));
       setTimeout(() => {
         window.print();
-        if (wasSource) setPreviewMode('source');
       }, 500);
     }
 
@@ -5077,9 +4982,7 @@ ${'</scr' + 'ipt>'}
     );
 
     function openExportImageModal() {
-      if (previewMode !== 'preview') {
-        setPreviewMode('preview');
-      }
+      // V0.16e: 删除了源码模式，无需模式切换
       const el = document.getElementById('export-image-modal');
       el.style.display = 'flex';
       void el.offsetWidth;
@@ -5376,7 +5279,7 @@ ${'</scr' + 'ipt>'}
       historyIndex--;
       editor.value = historyStack[historyIndex];
       lastHistoryText = editor.value;
-      if (previewMode === 'source') previewSource.value = editor.value;
+      // V0.16e: 删除了源码模式，无需同步 previewSource
       updatePreview();
       updateCount();
       refreshOutline();
@@ -5390,7 +5293,7 @@ ${'</scr' + 'ipt>'}
       historyIndex++;
       editor.value = historyStack[historyIndex];
       lastHistoryText = editor.value;
-      if (previewMode === 'source') previewSource.value = editor.value;
+      // V0.16e: 删除了源码模式，无需同步 previewSource
       updatePreview();
       updateCount();
       refreshOutline();
@@ -5547,19 +5450,12 @@ ${'</scr' + 'ipt>'}
     }
 
     function getActiveEditor() {
-      if (previewMode === 'source' && document.activeElement === previewSource) {
-        return previewSource;
-      }
+      // V0.16e: 删除了源码模式，getActiveEditor 永远返回 editor
       return editor;
     }
 
     function syncEditorFromActive() {
-      const el = getActiveEditor();
-      if (el === previewSource) {
-        editor.value = previewSource.value;
-      } else if (previewMode === 'source') {
-        previewSource.value = editor.value;
-      }
+      // V0.16e: 删除了源码模式，无需同步 previewSource，函数体留空占位
     }
 
     async function insertLink() {
@@ -6204,9 +6100,7 @@ ${'</scr' + 'ipt>'}
           editor.value += '\n\n' + markdown;
         }
 
-        if (previewMode === 'source') {
-          previewSource.value = editor.value;
-        }
+        // V0.16e: 删除了源码模式，无需同步 previewSource
         updatePreview();
         updateCount();
         saveToLocal();
@@ -6381,21 +6275,11 @@ ${'</scr' + 'ipt>'}
     editor.addEventListener('click', updateEditorStats);
     // 选区变化（含键盘方向键选字）时刷新状态栏
     document.addEventListener('selectionchange', () => {
-      if (document.activeElement === editor || document.activeElement === previewSource) {
+      if (document.activeElement === editor) {
         updateEditorStats();
       }
     });
-    previewSource.addEventListener('input', () => {
-      editor.value = previewSource.value;
-      clearTimeout(historyTimer);
-      historyTimer = setTimeout(recordHistory, 400);
-      updateCount();
-      updateEditorStats();
-      scheduleOutlineUpdate();
-      autoSave();
-    });
-    previewSource.addEventListener('keyup', updateEditorStats);
-    previewSource.addEventListener('click', updateEditorStats);
+    // V0.16e: 删除了源码模式，无需 previewSource 的 input/keyup/click event
     filenameInput.addEventListener('input', () => {
       // 同步文件格式标记
       const ext = (filenameInput.value.split('.').pop() || '').toLowerCase();
@@ -6560,7 +6444,7 @@ ${'</scr' + 'ipt>'}
       }
     }
     editor.addEventListener('keydown', handleEditorKeydown);
-    previewSource.addEventListener('keydown', handleEditorKeydown);
+    // V0.16e: 删除了源码模式，无需给 previewSource 加 keydown 监听
 
     // 启动
     init();
