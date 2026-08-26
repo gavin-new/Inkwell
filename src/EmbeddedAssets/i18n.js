@@ -14,6 +14,7 @@ const i18n = {
     sourceTab: '源码',
 
     // 文件操作
+    newFile: '新建',
     fileOpen: '打开文件…',
     importBtn: '导入',
     exportBtn: '导出',
@@ -403,6 +404,7 @@ mindmap
     aiSummarize: '📋 Summarize',
 
     fileOpen: 'Open file…',
+    newFile: 'New file',
     importBtn: 'Import',
     exportBtn: 'Export',
     clear: 'Clear',

@@ -1652,6 +1652,7 @@
   <svg class="icon-sprite" style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true">
     <defs>
       <symbol id="icon-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></symbol>
+      <symbol id="icon-file-plus" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></symbol>
       <symbol id="icon-save-copy" viewBox="0 0 24 24"><rect x="3" y="3" width="14" height="14" rx="2"></rect><path d="M7 7h10v10H7z M17 17h4v4H7v-4" fill="none" stroke="currentColor"></path></symbol>
       <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></symbol>
       <symbol id="icon-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></symbol>
@@ -1706,6 +1707,7 @@
       <div class="spacer"></div>
       <div class="top-actions">
         <button onclick="saveAsFile()" data-i18n-title="saveAs" title="另存为…"><svg class="icon"><use href="#icon-save-copy"></use></svg></button>
+        <button onclick="newFile()" data-i18n-title="newFile" title="新建空白文件 Ctrl+N"><svg class="icon"><use href="#icon-file-plus"></use></svg> <span data-i18n="newFile">新建</span></button>
         <button onclick="openFileFromDisk()" data-i18n-title="fileOpen" title="打开文件…"><svg class="icon"><use href="#icon-folder"></use></svg> <span data-i18n="fileOpen">打开</span></button>
         <label for="importFile" data-i18n-title="importBtn" title="从浏览器导入（旧版）"><svg class="icon"><use href="#icon-upload"></use></svg></label>
         <input type="file" id="importFile" accept=".md,.markdown,.txt,.csv,.py,.adoc,.rst,.org,.rtf,.textile,.mediawiki,.opml,.tex,.js,.ts,.json,.yaml,.yml,.toml,.xml,.html,.css,.sh,.ps1" onchange="importFile(this)">
@@ -1997,7 +1999,7 @@
           <li>需要登录的页面，可运行 <code>python web-to-md-proxy.py --bookmark</code> 生成书签小工具提取。</li>
         </ul>
 
-        <p><b>常用快捷键</b>：<code>Ctrl+S</code> 保存，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y / Ctrl+Shift+Z</code> 重做，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+Shift+K</code> 图片，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Ctrl+W</code> 关闭当前标签，<code>Ctrl+Tab / Ctrl+Shift+Tab</code> 切换标签，<code>Tab</code> 插入 4 空格缩进。</p>
+        <p><b>常用快捷键</b>：<code>Ctrl+N</code> 新建空白文档，<code>Ctrl+S</code> 保存，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y / Ctrl+Shift+Z</code> 重做，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+Shift+K</code> 图片，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Ctrl+W</code> 关闭当前标签，<code>Ctrl+Tab / Ctrl+Shift+Tab</code> 切换标签，<code>Tab</code> 插入 4 空格缩进。</p>
 
         <p style="color:var(--text-muted);font-size:12px;">一个简洁、强大的本地 Markdown 编辑器</p>
       </div>
@@ -2847,7 +2849,7 @@
           <button class="tab-close" title="关闭" data-close-path="${escapeAttr(path)}">×</button>
         </div>`;
       });
-      parts.push('<button class="tab-add" title="打开文件" data-tab-add="1">+</button>');
+      parts.push('<button class="tab-add" title="新建空白文件 Ctrl+N" data-tab-add="1">+</button>');
       container.innerHTML = parts.join('');
       // 事件绑定（用 addEventListener，path 通过 dataset 传，避免反斜杠转义问题）
       container.querySelectorAll('.editor-tab').forEach(el => {
@@ -2863,7 +2865,7 @@
         });
       });
       const addBtn = container.querySelector('[data-tab-add]');
-      if (addBtn) addBtn.addEventListener('click', openFileFromDisk);
+      if (addBtn) addBtn.addEventListener('click', newFile);
     }
 
     // V0.16: tab 点击 - 切到该 tab
@@ -4730,6 +4732,64 @@
       }
     }
 
+    // V0.16e 补丁: 新建空白文件（不弹对话框，直接创建未命名 tab）
+    //   - 虚拟路径前缀 `__untitled__/`，不会跟 Windows 文件路径冲突
+    //   - 走 dirty 3 态：保存 / 放弃 / 取消
+    //   - 保存时 saveToLocal 走"另存为"路径（因为 currentFilePath 是虚拟路径）
+    //   - tab-add 按钮（+）也调这个（VS Code 习惯：+ = 新建）
+    let untitledCounter = 1;
+    async function newFile() {
+      // 1) 如果当前 tab dirty：弹 3 态确认
+      if (activeTabPath && openTabs.has(activeTabPath)) {
+        const cur = openTabs.get(activeTabPath);
+        if (cur.dirty) {
+          const choice = await showConfirm3(
+            `"${cur.fileName}" 有未保存修改\n\n点击 [保存] 写回磁盘\n点击 [放弃] 直接新建（不保存）\n点击 [取消] 不新建`,
+            '新建文档',
+            { save: '保存', discard: '放弃', cancel: '取消' }
+          );
+          if (choice === 'cancel') return;
+          if (choice === 'save') {
+            // 走 closeTab 完整流程（含 3 态 + saveToLocal）
+            const beforePath = activeTabPath;
+            await closeTab(beforePath);
+            // closeTab 失败（dirty 仍 true）会 return 不关 → 取消新建
+            if (openTabs.has(beforePath) && openTabs.get(beforePath).dirty) {
+              showToast('保存失败，未新建', 'error');
+              return;
+            }
+          } else if (choice === 'discard') {
+            // 放弃修改：还原 current tab 到 lastSavedContent
+            cur.content = cur.lastSavedContent;
+            cur.docxBase64 = cur.lastSavedDocxBase64;
+            cur.dirty = false;
+            if (cur.lastSavedContent) showToast('已放弃修改', 'info');
+          }
+        }
+      }
+      // 2) 创建新未命名 tab
+      const idx = untitledCounter++;
+      const fileName = `未命名-${idx}.md`;
+      const path = `__untitled__/${fileName}`;
+      openTabs.set(path, {
+        fileName,
+        content: '',
+        format: 'md',
+        encoding: 'utf-8',
+        lineEnding: 'lf',
+        hasFinalNewline: true,
+        docxBase64: '',
+        dirty: true,        // 新建未保存，必为 dirty
+        lastSavedContent: '',
+        lastSavedDocxBase64: '',
+      });
+      tabOrder.push(path);
+      switchTab(path);
+      saveTabsToStorage();
+      // 3) focus 到编辑器
+      setTimeout(() => editor.focus(), 50);
+    }
+
     let currentFileEncoding = 'utf-8';
     let currentFileLineEnding = 'lf';        // 'crlf' | 'lf' | 'cr' | 'none'
     let currentFileHasFinalNewline = true;   // 文件末尾是否有换行
@@ -6471,6 +6531,10 @@ ${'</scr' + 'ipt>'}
           // V0.16e 补丁: Ctrl+W 关当前 tab（走 closeTab 完整流程，dirty tab 会弹保存对话框）
           e.preventDefault();
           if (activeTabPath) closeTab(activeTabPath);
+        } else if (e.key === 'n' && !e.shiftKey) {
+          // V0.16e 补丁: Ctrl+N 新建空白文件
+          e.preventDefault();
+          newFile();
         } else if (e.key === 'Tab') {
           // V0.16e 补丁: Ctrl+Tab / Ctrl+Shift+Tab 切 tab
           e.preventDefault();
