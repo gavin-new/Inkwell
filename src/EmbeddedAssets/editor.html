@@ -1997,7 +1997,7 @@
           <li>需要登录的页面，可运行 <code>python web-to-md-proxy.py --bookmark</code> 生成书签小工具提取。</li>
         </ul>
 
-        <p><b>常用快捷键</b>：<code>Ctrl+S</code> 保存，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y / Ctrl+Shift+Z</code> 重做，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+Shift+K</code> 图片，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Tab</code> 插入 4 空格缩进。</p>
+        <p><b>常用快捷键</b>：<code>Ctrl+S</code> 保存，<code>Ctrl+Z</code> 撤销，<code>Ctrl+Y / Ctrl+Shift+Z</code> 重做，<code>Ctrl+B</code> 加粗，<code>Ctrl+I</code> 斜体，<code>Ctrl+U</code> 下划线，<code>Ctrl+K</code> 链接，<code>Ctrl+Shift+K</code> 图片，<code>Ctrl+F</code> 查找，<code>Ctrl+H</code> 替换，<code>Ctrl+W</code> 关闭当前标签，<code>Ctrl+Tab / Ctrl+Shift+Tab</code> 切换标签，<code>Tab</code> 插入 4 空格缩进。</p>
 
         <p style="color:var(--text-muted);font-size:12px;">一个简洁、强大的本地 Markdown 编辑器</p>
       </div>
@@ -6467,9 +6467,23 @@ ${'</scr' + 'ipt>'}
         } else if (e.key === 'h') {
           e.preventDefault();
           openFindModal(true);
+        } else if (e.key === 'w' && !e.shiftKey) {
+          // V0.16e 补丁: Ctrl+W 关当前 tab（走 closeTab 完整流程，dirty tab 会弹保存对话框）
+          e.preventDefault();
+          if (activeTabPath) closeTab(activeTabPath);
+        } else if (e.key === 'Tab') {
+          // V0.16e 补丁: Ctrl+Tab / Ctrl+Shift+Tab 切 tab
+          e.preventDefault();
+          if (tabOrder.length > 1) {
+            const idx = tabOrder.indexOf(activeTabPath);
+            const direction = e.shiftKey ? -1 : 1;
+            const nextIdx = (idx + direction + tabOrder.length) % tabOrder.length;
+            switchTab(tabOrder[nextIdx]);
+          }
         }
+        return;  // Ctrl 按下时不走下面的 Tab 缩进分支
       }
-      // Tab 缩进
+      // 普通 Tab：4 空格缩进
       if (e.key === 'Tab') {
         e.preventDefault();
         const el = getActiveEditor();
