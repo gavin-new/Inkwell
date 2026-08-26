@@ -89,10 +89,10 @@ internal sealed class ApiBridge
                 "chooseFolder" => await ChooseFolder(),
                 "pickSavePath" => await PickSavePath(args),
                 "pickOpenPath" => await PickOpenPath(args),
-                "confirm" => ConfirmDialog(args),
+                "confirm" => await ConfirmDialog(args),
                 "confirm3" => await ConfirmDialog3(args),
-                "alert" => AlertDialog(args),
-                "prompt" => PromptDialog(args),
+                "alert" => await AlertDialog(args),
+                "prompt" => await PromptDialog(args),
                 "getInitialFile" => _form.InitialFilePath,
                 "setCurrentFile" => SetCurrentFile(args),
                 "readResource" => ReadResource(args),
@@ -655,18 +655,24 @@ internal sealed class ApiBridge
 
     // ========== 对话框 ==========
 
-    private bool ConfirmDialog(JsonElement args)
+    // V0.16e: 改用 BeginInvoke + await 模式，跟 PickOpenPath / ConfirmDialog3 一致
+    // 避免在 WebView2 消息回调里同步弹模态对话框导致弹窗落主窗口后面
+    private async Task<bool> ConfirmDialog(JsonElement args)
     {
         string message = args[0].GetString() ?? "";
         string? title = args[1].ValueKind == JsonValueKind.String ? args[1].GetString() : null;
         var tcs = new TaskCompletionSource<bool>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
-            var r = MessageBox.Show(_form, message, title ?? "Inkwell",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
-            tcs.SetResult(r == DialogResult.Yes);
+            try
+            {
+                var r = MessageBox.Show(_form, message, title ?? "Inkwell",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                tcs.SetResult(r == DialogResult.Yes);
+            }
+            catch (Exception ex) { tcs.SetException(ex); }
         });
-        return tcs.Task.GetAwaiter().GetResult();
+        return await tcs.Task;
     }
 
     // V0.16c: 三按钮对话框（保存/放弃/取消）— 用 MessageBox YesNoCancel
@@ -701,32 +707,36 @@ internal sealed class ApiBridge
         return await tcs.Task;
     }
 
-    private bool AlertDialog(JsonElement args)
+    private async Task<bool> AlertDialog(JsonElement args)
     {
         string message = args[0].GetString() ?? "";
         string? title = args[1].ValueKind == JsonValueKind.String ? args[1].GetString() : null;
         var tcs = new TaskCompletionSource<bool>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
-            MessageBox.Show(_form, message, title ?? "Inkwell",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            tcs.SetResult(true);
+            try
+            {
+                MessageBox.Show(_form, message, title ?? "Inkwell",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                tcs.SetResult(true);
+            }
+            catch (Exception ex) { tcs.SetException(ex); }
         });
-        return tcs.Task.GetAwaiter().GetResult();
+        return await tcs.Task;
     }
 
     /// <summary>
     /// 简单输入对话框（用 VB Interaction.InputBox 走 .NET 内置）。
     /// 返回用户输入的字符串，取消返回 null。
     /// </summary>
-    private string? PromptDialog(JsonElement args)
+    private async Task<string?> PromptDialog(JsonElement args)
     {
         string message = args[0].GetString() ?? "";
         string defaultValue = args[1].ValueKind == JsonValueKind.String ? args[1].GetString() ?? "" : "";
         string? title = args[2].ValueKind == JsonValueKind.String ? args[2].GetString() : null;
 
         var tcs = new TaskCompletionSource<string?>();
-        _form.Invoke(() =>
+        _form.BeginInvoke(() =>
         {
             // 用 .NET 内置的 VisualBasic Interaction.InputBox（最简单，无需自定义 WinForms 控件）
             try
@@ -740,7 +750,7 @@ internal sealed class ApiBridge
                 tcs.SetException(ex);
             }
         });
-        return tcs.Task.GetAwaiter().GetResult();
+        return await tcs.Task;
     }
 
     // ========== 状态 ==========

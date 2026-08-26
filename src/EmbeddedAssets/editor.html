@@ -2826,6 +2826,7 @@
     }
 
     // V0.16: 渲染 tab 栏
+    // V0.16e: 改用 addEventListener + dataset 传 path，避免 inline string 中反斜杠被 JS 当转义
     function renderTabs() {
       const container = document.getElementById('editor-tabs');
       if (!container) return;
@@ -2840,14 +2841,29 @@
         if (!tab) return '';
         const active = path === activeTabPath;
         const dirtyMark = tab.dirty ? '<span class="tab-dirty" title="未保存">●</span>' : '';
-        return `<div class="editor-tab ${active ? 'active' : ''}" data-path="${escapeAttr(path)}" onclick="handleTabClick('${escapeAttr(path)}')">
+        return `<div class="editor-tab ${active ? 'active' : ''}" data-path="${escapeAttr(path)}">
           ${dirtyMark}
           <span class="tab-name" title="${escapeAttr(path)}">${escapeHtml(tab.fileName)}</span>
-          <button class="tab-close" title="关闭" onclick="event.stopPropagation(); closeTab('${escapeAttr(path)}')">×</button>
+          <button class="tab-close" title="关闭" data-close-path="${escapeAttr(path)}">×</button>
         </div>`;
       });
-      parts.push('<button class="tab-add" title="打开文件" onclick="openFileFromDisk()">+</button>');
+      parts.push('<button class="tab-add" title="打开文件" data-tab-add="1">+</button>');
       container.innerHTML = parts.join('');
+      // 事件绑定（用 addEventListener，path 通过 dataset 传，避免反斜杠转义问题）
+      container.querySelectorAll('.editor-tab').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.classList.contains('tab-close')) return;  // × 按钮自己处理
+          handleTabClick(el.dataset.path);
+        });
+      });
+      container.querySelectorAll('.tab-close').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeTab(btn.dataset.closePath);
+        });
+      });
+      const addBtn = container.querySelector('[data-tab-add]');
+      if (addBtn) addBtn.addEventListener('click', openFileFromDisk);
     }
 
     // V0.16: tab 点击 - 切到该 tab
@@ -2874,15 +2890,31 @@
         if (choice === 'save') {
           switchTab(path);
           await saveToLocal();
-          // 如果保存失败（tab.dirty 仍为 true），再问一次是否放弃关闭
+          // 如果保存失败（tab.dirty 仍为 true），再问一次 — 三态：在资源管理器中打开 / 放弃 / 取消
           const t2 = openTabs.get(path);
           if (t2 && t2.dirty) {
-            const forceClose = await showConfirm('保存失败，是否仍要放弃修改并关闭？\n\n确定 = 放弃修改并关闭\n取消 = 保留 tab 不关闭');
-            if (!forceClose) {
+            const forceChoice = await showConfirm3(
+              `保存失败，可能文件被其他程序占用。\n\n点击 [在资源管理器中打开] 定位文件，解锁后重试\n点击 [放弃修改] 直接关闭（不保存）\n点击 [取消] 保留 tab 不关闭`,
+              '保存失败',
+              { save: '在资源管理器中打开', discard: '放弃修改', cancel: '取消' }
+            );
+            if (forceChoice === 'cancel') {
               showToast('已保留 tab，请修复保存问题后重试', 'info');
               return;
             }
-            // 强制放弃修改
+            if (forceChoice === 'save') {
+              // 在资源管理器中显示文件路径，方便用户解锁
+              try {
+                if (window.bridge) {
+                  await window.bridge.call('showInFolder', currentFilePath || path);
+                  showToast('已在资源管理器中打开，请解锁后重新保存', 'info');
+                }
+              } catch (e) {
+                showToast('打开资源管理器失败: ' + (e.message || e), 'error');
+              }
+              return;  // 保留 tab
+            }
+            // forceChoice === 'discard'：放弃修改
             t2.content = t2.lastSavedContent;
             t2.docxBase64 = t2.lastSavedDocxBase64;
             t2.dirty = false;
