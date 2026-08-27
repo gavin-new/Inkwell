@@ -968,6 +968,30 @@
       white-space: pre-wrap;
       word-break: break-all;
     }
+    /* V0.16e: 编辑区行号标尺 */
+    .editor-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .editor-gutter {
+      flex-shrink: 0;
+      min-width: 44px;
+      padding: 28px 8px 28px 0;
+      box-sizing: border-box;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.8;  /* 必须跟 .editor-pane textarea 的 line-height 完全一致 */
+      color: var(--text-muted);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      user-select: none;
+      white-space: pre;
+      font-variant-numeric: tabular-nums;
+    }
     .preview-content {
       flex: 1;
       overflow: auto;
@@ -1823,14 +1847,17 @@
       <div class="pane editor-pane" id="editor-pane">
         <div class="pane-header">
           <span class="pane-title" id="current-file-name" data-i18n="editorPaneTitle">编辑</span>
-          <span data-i18n="editorPaneHint">支持 Markdown 语法</span>
           <button class="pane-action" id="json-format-btn" onclick="formatJsonDocument()" data-i18n-title="jsonFormatBtn" title="美化 JSON（格式化缩进）Ctrl+Shift+F" style="display:none;">
             <svg class="icon icon-sm"><use href="#icon-braces"></use></svg>
           </button>
         </div>
         <!-- V0.16: 多文件 tab 栏（关闭/切换/dirty 跟踪） -->
         <div class="editor-tabs" id="editor-tabs"></div>
-        <textarea id="editor" data-i18n-placeholder="editorPlaceholder" placeholder="开始输入 Markdown..." spellcheck="false"></textarea>
+        <!-- V0.16e: 行号 gutter（左侧标尺） -->
+        <div class="editor-wrap">
+          <div class="editor-gutter" id="editor-gutter" aria-hidden="true"></div>
+          <textarea id="editor" data-i18n-placeholder="editorPlaceholder" placeholder="开始输入 Markdown..." spellcheck="false"></textarea>
+        </div>
       </div>
 
       <div class="resizer" id="resizer" title="拖动调整右侧宽度"></div>
@@ -4048,7 +4075,12 @@
       isSyncingScroll = false;
     }
 
-    editor.addEventListener('scroll', () => syncScroll(editor, preview));
+    editor.addEventListener('scroll', () => {
+      syncScroll(editor, preview);
+      // V0.16e: 同步行号 gutter
+      const g = document.getElementById('editor-gutter');
+      if (g) g.scrollTop = editor.scrollTop;
+    });
     preview.addEventListener('scroll', () => syncScroll(preview, editor));
 
     // 初始化：恢复内容、文件名、主题（V0.12: 每个步骤独立 try/catch，防止局部报错断后续）
@@ -4102,6 +4134,8 @@
       });
       tryRun('preview', () => { updatePreview(); updateCount(); });
       tryRun('cardsVisible', () => applyCardsVisibility());
+      // V0.16e: 初始化行号标尺
+      tryRun('gutter', () => updateGutter());
       // V0.16e: 删除了源码模式，previewMode 始终为 'preview'，无需恢复 localStorage
       tryRun('previewModeCompat', () => {
         // 兼容旧版 localStorage：清掉 source 模式（防止老用户被卡）
@@ -4490,6 +4524,22 @@
       const count = text.replace(/\s/g, '').length;
       wordCount.textContent = t('wordCount', count);
       updateEditorStats();
+      updateGutter();
+    }
+
+    // V0.16e: 更新编辑区左侧行号标尺
+    function updateGutter() {
+      const gutter = document.getElementById('editor-gutter');
+      if (!gutter) return;
+      const text = editor.value || '';
+      const lineCount = text === '' ? 1 : text.split('\n').length;
+      const lines = [];
+      for (let i = 1; i <= lineCount; i++) lines.push(i);
+      gutter.textContent = lines.join('\n');
+      gutter.scrollTop = editor.scrollTop;
+      // 动态加宽以容纳数字（行数 100 → ~36px；1000 → ~44px；10000+ → ~60px）
+      const digits = String(lineCount).length;
+      gutter.style.minWidth = Math.max(44, 20 + digits * 8) + 'px';
     }
 
     // V0.15: 状态栏综合统计 — 总字符 / 选中 / 光标行 / 总行数
