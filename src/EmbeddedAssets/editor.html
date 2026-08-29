@@ -3526,14 +3526,18 @@
     // Inkwell 执行后把结果回喂给 AI，多轮直到 AI 给出最终回复。
 
     const TOOL_SYSTEM_PROMPT = '你可以使用以下工具直接读取和修改编辑区内容，所有修改会自动写入撤销栈（Ctrl+Z 可恢复）：\n' +
+      '- get_document_stats: 拿文档规模（行数/字符数/标题列表/段落数），第一次接触文档时建议先调\n' +
+      '- read_all_lines: 一次性读完全部行（适合 < 2000 行的小文档；大文档建议分块 read_lines）\n' +
       '- get_outline: 查看文档大纲（所有标题及层级），多步编辑前建议先调用\n' +
       '- read_lines(start_line, end_line): 读指定行范围（1-indexed，闭区间）\n' +
       '- find_text(query): 查找文本在哪些行出现，返回行号和片段\n' +
       '- replace_lines(start_line, end_line, new_content): 替换指定行范围\n' +
       '- replace_section(heading, new_content): 替换某个标题下的整个章节内容（标题本身保留）\n' +
       '- insert_after_heading(heading, content, position): 在标题附近插入内容；position 可选 after/before/append\n' +
+      '- append_to_end(content): 在文档末尾追加内容（自动补空行）\n' +
+      '- prepend_to_start(content): 在文档开头插入内容（自动补空行）\n' +
       '- replace_selection(new_content): 替换用户当前光标选中的文字（用户在系统提示中会告诉你选区内容）\n' +
-      '用户的消息里如果带了【当前用户选区】块，说明他在编辑器里选中了一段文字，按指令改完后用 replace_selection 替换即可。' +
+      '用户的消息里如果带了【当前用户选区】块，说明他在编辑器里选中了一段文字，按指令改完后用 replace_selection 工具改写并替换。' +
       '每次工具调用后你会收到 JSON 结果，结果作为上下文继续。完成所有编辑后用一句简短中文告诉用户改了什么。';
 
     // 工具定义（OpenAI tools 格式）
@@ -3634,6 +3638,51 @@
               new_content: { type: 'string', description: '替换选区的新内容（多行用 \\n 分隔）' },
             },
             required: ['new_content'],
+          },
+        },
+      },
+      // V0.16h: 整体文档级工具
+      {
+        type: 'function',
+        function: {
+          name: 'get_document_stats',
+          description: '获取文档统计信息：总行数、总字符数、所有标题（行号+层级+文字）、段落数。第一次接触文档时建议先调这个了解规模。',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'read_all_lines',
+          description: '一次性读取整个文档的所有行，返回 { total_lines, lines: [{line, content}] }。推荐用于 < 2000 行的小文档；超过这个规模建议用 read_lines 分块读，否则会撑爆上下文。',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'append_to_end',
+          description: '在文档末尾追加新内容。自动在前面补一个空行（保持 Markdown 排版整洁）。',
+          parameters: {
+            type: 'object',
+            properties: {
+              content: { type: 'string', description: '要追加的内容（多行用 \\n 分隔）' },
+            },
+            required: ['content'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'prepend_to_start',
+          description: '在文档开头插入新内容。自动在后面补一个空行。',
+          parameters: {
+            type: 'object',
+            properties: {
+              content: { type: 'string', description: '要插入的内容（多行用 \\n 分隔）' },
+            },
+            required: ['content'],
           },
         },
       },
@@ -3831,6 +3880,93 @@
           preview: new_content.length <= 80 ? new_content : (new_content.slice(0, 80) + '…'),
         };
       },
+
+      // V0.16h: 整体文档级工具
+      // get_document_stats: 廉价元信息查询，AI 应该先调这个决定读法
+      get_document_stats: () => {
+        const lines = editor.value.split('\n');
+        const headings = [];
+        let paragraphCount = 0;
+        let inParagraph = false;
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+          if (m) {
+            headings.push({ line: i + 1, level: m[1].length, text: m[2].trim() });
+          }
+          if (lines[i].trim() !== '') {
+            if (!inParagraph) { paragraphCount++; inParagraph = true; }
+          } else {
+            inParagraph = false;
+          }
+        }
+        return {
+          total_lines: lines.length,
+          total_chars: editor.value.length,
+          paragraph_count: paragraphCount,
+          heading_count: headings.length,
+          headings,
+        };
+      },
+
+      // read_all_lines: 一次性读全文档（AI 看完后写总结/追加内容）
+      // 注意：返回的 lines 数组会消耗很多 tokens，AI 应当先用 get_document_stats 判断规模
+      read_all_lines: () => {
+        const lines = editor.value.split('\n');
+        return {
+          total_lines: lines.length,
+          total_chars: editor.value.length,
+          lines: lines.map((c, i) => ({ line: i + 1, content: c })),
+        };
+      },
+
+      // append_to_end: 末尾追加（总结章节、FAQ、追加段落等场景）
+      append_to_end: ({ content } = {}) => {
+        if (typeof content !== 'string') {
+          return { error: '参数缺失：需要 content(字符串)' };
+        }
+        const lines = editor.value.split('\n');
+        // 末尾非空行时先补一个空行
+        if (lines.length > 0 && lines[lines.length - 1].trim() !== '') {
+          lines.push('');
+        }
+        const newLines = content.split('\n');
+        pushHistory();
+        const newValue = [...lines, ...newLines].join('\n');
+        editor.value = newValue;
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return {
+          success: true,
+          total_lines: newValue.split('\n').length,
+          appended_lines: newLines.length,
+        };
+      },
+
+      // prepend_to_start: 开头插入（顶部加摘要、加标题、加前言等）
+      prepend_to_start: ({ content } = {}) => {
+        if (typeof content !== 'string') {
+          return { error: '参数缺失：需要 content(字符串)' };
+        }
+        const newLines = content.split('\n');
+        const currentLines = editor.value.split('\n');
+        // 原文首行非空时，在 prepended content 末尾补空行
+        if (currentLines.length > 0 && currentLines[0].trim() !== '' && newLines[newLines.length - 1].trim() !== '') {
+          newLines.push('');
+        }
+        pushHistory();
+        editor.value = [...newLines, ...currentLines].join('\n');
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return {
+          success: true,
+          total_lines: editor.value.split('\n').length,
+          inserted_lines: newLines.length,
+        };
+      },
     };
 
     async function sendAiMessage() {
@@ -3874,7 +4010,7 @@
       aiMessages.push({ role: 'assistant', content: '' });
       renderAiChat();
 
-      const MAX_TOOL_ROUNDS = 8; // 防止 AI 死循环
+      const MAX_TOOL_ROUNDS = 32; // 防止 AI 死循环（V0.16h 从 8 提到 32，支持复杂多步编辑）
       let round = 0;
       let lastError = null;
 
