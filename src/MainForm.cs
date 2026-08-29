@@ -61,10 +61,9 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16k patch: 49（折叠按钮箭头随可见性翻转：
-    //                  上卡片可见朝上、隐藏朝下；下卡片可见朝下、隐藏朝上。
-    //                  title 在 collapsePane / expandPane 之间切换）
-    private const string ResourcesVersion = "49";
+    // V0.16l patch: 50（折叠面板改为只隐藏 content，保留卡片栏（pane + header），
+    //                  pane-collapsed class 让 flex 收缩到 header 高度）
+    private const string ResourcesVersion = "50";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

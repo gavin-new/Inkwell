@@ -471,6 +471,25 @@
     .left-pane-bottom {
       flex: 1 1 0;
       min-height: 0;
+    }
+    /* V0.16l: 折叠状态 - 卡片栏（pane 容器内的子元素）只显示 header，content 已 display:none
+       不再 flex:1 占空间，而是按内容（header 36px）收缩。
+       注意：.pane 是外层 wrapper，class 实际是加在 .left-pane-top / .right-pane-top 等 */
+    .left-pane-top.pane-collapsed,
+    .left-pane-bottom.pane-collapsed,
+    .right-pane-top.pane-collapsed,
+    .right-pane-bottom.pane-collapsed {
+      flex: 0 0 auto !important;
+      min-height: 0;
+    }
+    .left-pane-top.pane-collapsed > .pane-header,
+    .left-pane-bottom.pane-collapsed > .pane-header,
+    .right-pane-top.pane-collapsed > .pane-header,
+    .right-pane-bottom.pane-collapsed > .pane-header {
+      border-bottom: none;
+    }
+    .left-pane-top, .left-pane-bottom,
+    .right-pane-top, .right-pane-bottom {
       display: flex;
       flex-direction: column;
       background: var(--panel-bg);
@@ -4467,46 +4486,42 @@
     }
 
     function applyCardsVisibility() {
-      // 1) 显隐每张卡片所在的槽位
+      // 1) 每张卡片对应 pane（卡片栏容器，header 一直在）和 content（正文）
+      //    V0.16k 修复：折叠 = 只收 content，pane + header 一直保留
       const cardMap = {
-        fileTree: document.querySelector('.left-pane-top'),
-        outline:  document.querySelector('.left-pane-bottom'),
-        preview:  document.querySelector('.right-pane-top'),
-        ai:       document.querySelector('.right-pane-bottom')
+        fileTree: { pane: document.querySelector('.left-pane-top'),    content: document.getElementById('file-tree') },
+        outline:  { pane: document.querySelector('.left-pane-bottom'), content: document.getElementById('outline-list') },
+        preview:  { pane: document.querySelector('.right-pane-top'),   content: document.getElementById('preview') },
+        ai:       { pane: document.querySelector('.right-pane-bottom'),content: document.getElementById('ai-chat') }
       };
 
-      // 2) 一侧卡片全部挪走时整列收起，编辑区扩展
-      const leftAnyVisible  = [...CARD_LEFT].some(n => cardsVisible[n]);
-      const rightAnyVisible = [...CARD_RIGHT].some(n => cardsVisible[n]);
-      const leftPane  = document.querySelector('.left-pane');
-      const rightPane = document.querySelector('.right-pane');
-      if (leftPane)  leftPane.classList.toggle('col-hidden',  !leftAnyVisible);
-      if (rightPane) rightPane.classList.toggle('col-hidden', !rightAnyVisible);
+      // 2) 隐 content，pane 加 collapsed class 让它收缩到只显示 header
+      //    cardsVisible=true → 内容显示，pane 正常高度
+      //    cardsVisible=false → 内容隐藏，pane 高度=header 高度
+      for (const [name, { pane, content }] of Object.entries(cardMap)) {
+        if (!pane || !content) continue;
+        const visible = cardsVisible[name];
+        content.style.display = visible ? '' : 'none';
+        pane.classList.toggle('pane-collapsed', !visible);
+        // 清掉内联 flex，让 CSS 控制（collapsed: flex 0 0 auto / expanded: flex 1 1 0）
+        pane.style.flex = '';
+      }
 
-      // 3) 一侧只剩一张卡时：隐藏上下 resizer，清掉内联 flex 让它填满整列；
-      //    两张都在时恢复保存的上下比例
+      // 3) 调整 resizer：任一卡 collapsed 时不需要 resizer
       for (const pair of [['fileTree', 'outline'], ['preview', 'ai']]) {
-        const parent = (cardMap[pair[0]] || {}).parentElement;
+        const cardA = cardMap[pair[0]];
+        const cardB = cardMap[pair[1]];
+        if (!cardA?.pane || !cardB?.pane) continue;
+        const parent = cardA.pane.parentElement;
         if (!parent) continue;
-        const oneHidden = !cardsVisible[pair[0]] || !cardsVisible[pair[1]];
+        const oneCollapsed = !cardsVisible[pair[0]] || !cardsVisible[pair[1]];
         const resizer = parent.querySelector(':scope > .resizer-h');
-        if (resizer) resizer.style.display = oneHidden ? 'none' : '';
-        if (oneHidden) {
-          if (cardMap[pair[0]]) cardMap[pair[0]].style.flex = '';
-          if (cardMap[pair[1]]) cardMap[pair[1]].style.flex = '';
-        }
+        if (resizer) resizer.style.display = oneCollapsed ? 'none' : '';
       }
 
-      // 4) 显隐各卡片（在整列处理之后，避免列隐藏时误算尺寸）
-      for (const [name, el] of Object.entries(cardMap)) {
-        if (!el) continue;
-        el.style.display = cardsVisible[name] ? '' : 'none';
-      }
-
-      // V0.16j: 同步更新 4 个折叠按钮的箭头方向 + title
-      // 顶部卡片（fileTree / preview）：可见时箭头朝上，隐藏时朝下
-      // 底部卡片（outline / ai）：可见时箭头朝下，隐藏时朝上
-      // 这样视觉上箭头永远指向"点我会发生什么"
+      // V0.16k: 4 个折叠按钮的箭头方向 + title
+      // 顶部卡 (fileTree/preview): 可见朝上、隐藏朝下
+      // 底部卡 (outline/ai):     可见朝下、隐藏朝上
       const updateCollapseBtn = (id, isTop) => {
         const btn = document.getElementById(id);
         if (!btn) return;
@@ -4515,21 +4530,18 @@
                      : id === 'outline-collapse-btn'   ? cardsVisible.outline
                      : id === 'preview-collapse-btn'   ? cardsVisible.preview
                      : cardsVisible.ai;
-        // 可见 → 顶部卡箭头朝上、底部卡箭头朝下（"点击折叠"）
-        // 隐藏 → 顶部卡箭头朝下、底部卡箭头朝上（"点击展开"）
-        const expandedHref = isTop ? '#icon-chevron-up' : '#icon-chevron-down';
+        const expandedHref  = isTop ? '#icon-chevron-up'   : '#icon-chevron-down';
         const collapsedHref = isTop ? '#icon-chevron-down' : '#icon-chevron-up';
-        const targetHref = visible ? expandedHref : collapsedHref;
-        if (useEl) useEl.setAttribute('href', targetHref);
+        if (useEl) useEl.setAttribute('href', visible ? expandedHref : collapsedHref);
         btn.setAttribute('title', visible ? t('collapsePane') : t('expandPane'));
         btn.setAttribute('data-i18n-title', visible ? 'collapsePane' : 'expandPane');
       };
-      updateCollapseBtn('file-tree-collapse-btn', true);   // 顶部
-      updateCollapseBtn('preview-collapse-btn',   true);   // 顶部
-      updateCollapseBtn('outline-collapse-btn',   false);  // 底部
-      updateCollapseBtn('ai-collapse-btn',        false);  // 底部
+      updateCollapseBtn('file-tree-collapse-btn', true);
+      updateCollapseBtn('preview-collapse-btn',   true);
+      updateCollapseBtn('outline-collapse-btn',   false);
+      updateCollapseBtn('ai-collapse-btn',        false);
 
-      // 5) 两张卡都在的一侧恢复保存的上下分割比例
+      // 4) 两张卡都展开时恢复保存的上下分割比例
       if (cardsVisible.fileTree && cardsVisible.outline) {
         applyHSplit('.left-pane', '.left-pane-top', '.left-pane-bottom', 'inkwell_left_split', 0.55);
       }
@@ -4537,13 +4549,13 @@
         applyHSplit('.right-pane', '.right-pane-top', '.right-pane-bottom', 'inkwell_right_split', 0.55);
       }
 
-      // 6) 状态栏开关按钮高亮同步
+      // 5) 状态栏开关按钮高亮同步
       document.querySelectorAll('.status-card').forEach(btn => {
         const card = btn.dataset.card;
         if (card in cardsVisible) btn.classList.toggle('active', cardsVisible[card]);
       });
 
-      // 7) 通知 grid 重新计算列宽
+      // 6) 通知 grid 重新计算列宽（不影响隐藏列，hidden 类不再被 toggle）
       try { applySplit(); } catch {}
     }
 
