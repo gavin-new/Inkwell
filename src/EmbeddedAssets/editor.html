@@ -624,6 +624,10 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* V0.16i: 文件夹子项容器（缩进通过 padding-left 在 renderDirTree 里设置） */
+    .ft-children {
+      overflow: hidden;
+    }
     .right-pane {
       display: flex;
       flex-direction: column;
@@ -1655,6 +1659,8 @@
       <symbol id="icon-file-plus" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></symbol>
       <symbol id="icon-save-copy" viewBox="0 0 24 24"><rect x="3" y="3" width="14" height="14" rx="2"></rect><path d="M7 7h10v10H7z M17 17h4v4H7v-4" fill="none" stroke="currentColor"></path></symbol>
       <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></symbol>
+      <!-- V0.16i: 展开状态的文件夹图标（与 icon-folder 区别） -->
+      <symbol id="icon-folder-open" viewBox="0 0 24 24"><path d="M6 14l3-3h11l-3 3H6zm0 0v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-9l-2-3H6a2 2 0 0 0-2 2v9z" fill-opacity="0.3"></path><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill-opacity="0.6"></path></symbol>
       <!-- V0.16e: 工作区文件树 — 按扩展名区分的图标 -->
       <symbol id="icon-md" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M7 16V8l3 4 3-4v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M16 8v8m0 0c-1.5 0-2.5-1-2.5-2.5S14.5 11 16 11s2.5 1 2.5 2.5S17.5 16 16 16z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></symbol>
       <symbol id="icon-json" viewBox="0 0 24 24"><path d="M14 3h-4l-5 9 5 9h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9 12h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path><path d="M17.5 7.5a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M17.5 16.5a2 2 0 0 0 2-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></symbol>
@@ -2447,24 +2453,31 @@
       }
     }
 
-    // V0.16b: 加载工作区根目录（永远只拉 [0] 的第一层；保留签名以兼容旧调用）
+    // V0.16b: 加载工作区根目录
+    // V0.16i 升级：用 renderDirTree 替代 renderFlatList，支持子文件夹展开/收起
     async function loadFileTreeForRoot(index) {
       if (index !== 0) return;  // V0.16b: 只支持第一个根
       if (index < 0 || index >= workspaceRoots.length) return;
       const root = workspaceRoots[index];
       const container = document.getElementById('file-tree');
-      const listEl = container.querySelector('.file-tree-list');
-      if (!listEl) {
-        // 还没渲染 → 先整体渲染
-        renderFileTree();
-        return;
-      }
-      listEl.innerHTML = '<div class="file-tree-empty">加载中…</div>';
+      if (!container) return;
+      // 清空旧内容（保留切换工作区按钮）
+      const existingList = container.querySelector('.file-tree-list');
+      if (existingList) existingList.remove();
+      const newList = document.createElement('div');
+      newList.className = 'file-tree-list';
+      container.insertBefore(newList, container.firstChild);
+      newList.innerHTML = '<div class="file-tree-empty">加载中…</div>';
       try {
         const result = await window.bridge.call('listDirectory', root.path);
-        renderFlatList(listEl, result && result.tree ? result.tree : null, root.path);
+        newList.innerHTML = '';
+        if (result && result.tree) {
+          renderDirTree(newList, result.tree, 0, true, root.path);
+        } else {
+          newList.innerHTML = '<div class="file-tree-empty">（空目录）</div>';
+        }
       } catch (e) {
-        listEl.innerHTML = '<div class="file-tree-empty">加载失败: ' + escapeHtml(e.message || '') + '</div>';
+        newList.innerHTML = '<div class="file-tree-empty">加载失败: ' + escapeHtml(e.message || '') + '</div>';
       }
     }
 
@@ -2711,6 +2724,19 @@
       node._childrenWrap.style.display = expanded ? 'none' : 'block';
       const toggle = row.querySelector('.ft-toggle');
       if (toggle) toggle.classList.toggle('open', !expanded);
+      // V0.16i: 展开/收起时切换文件夹图标（closed → open）
+      const icon = row.querySelector('.ft-icon');
+      if (icon) {
+        const useEl = icon.querySelector('use');
+        if (useEl) {
+          const href = useEl.getAttribute('href') || useEl.getAttribute('xlink:href') || '';
+          if (href === '#icon-folder') {
+            useEl.setAttribute('href', '#icon-folder-open');
+          } else if (href === '#icon-folder-open') {
+            useEl.setAttribute('href', '#icon-folder');
+          }
+        }
+      }
     }
 
     async function openFileFromPath(path) {
@@ -5972,6 +5998,26 @@ ${'</scr' + 'ipt>'}
       return 'plain';
     }
 
+    // V0.16i: 拖拽 + 导入按钮共享的文本类扩展名白名单
+    // 同时用于 <input type="file"> 的 accept 属性 + 拖拽 drop handler
+    const SUPPORTED_TEXT_EXTS = new Set([
+      'md', 'markdown', 'txt', 'csv', 'tsv',
+      'py', 'js', 'ts', 'jsx', 'tsx', 'mjs', 'cjs',
+      'json', 'yaml', 'yml', 'toml', 'ini', 'conf', 'env',
+      'xml', 'html', 'htm', 'css', 'scss', 'less',
+      'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd',
+      'java', 'kt', 'swift', 'c', 'cpp', 'cc', 'h', 'hpp',
+      'cs', 'php', 'rb', 'pl', 'lua', 'sql',
+      'adoc', 'rst', 'org', 'rtf', 'textile', 'mediawiki', 'opml', 'tex',
+      'dockerfile', 'makefile', 'log', 'diff', 'patch',
+      'rs', 'go'
+    ]);
+    // 启动时同步给 file input（一次性，避免遗漏同步）
+    (function syncImportInputAccept() {
+      const el = document.getElementById('importFile');
+      if (el) el.accept = [...SUPPORTED_TEXT_EXTS].map(e => '.' + e).join(',');
+    })();
+
     // 导入文件
     function importFile(input) {
       const file = input.files[0];
@@ -7079,30 +7125,48 @@ ${'</scr' + 'ipt>'}
       hideDropOverlay();
       const files = e.dataTransfer.files;
       if (!files.length) return;
-      const file = files[0];
-      const ext = file.name.split('.').pop().toLowerCase();
 
-      const allowedText = ['md', 'markdown', 'txt'];
-      if (allowedText.includes(ext)) {
-        loadFile(file);
-        return;
-      }
+      // V0.16i: 多文件支持 + 白名单扩展到 30+ 文本类扩展名
+      let textOpened = 0;
+      let imgInserted = 0;
+      const skipped = [];
 
-      if (file.type.startsWith('image/')) {
-        if (file.size > 5 * 1024 * 1024) {
-          showToast(t('toastImageTooLarge'));
-          return;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (file.type.startsWith('image/')) {
+          if (file.size > 5 * 1024 * 1024) {
+            skipped.push(file.name + ' (>5MB)');
+            continue;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            insertImageMarkdown(file.name, ev.target.result);
+            showToast(t('toastImageInserted'));
+          };
+          reader.readAsDataURL(file);
+          imgInserted++;
+        } else if (SUPPORTED_TEXT_EXTS.has(ext)) {
+          // 文本类：只把第一个当打开，其余提示
+          if (textOpened === 0) {
+            loadFile(file);
+            textOpened++;
+          } else {
+            skipped.push(file.name);
+          }
+        } else {
+          // 未知类型：尝试当文本读（loadFile 内部 readAsText 不会崩溃）
+          if (textOpened === 0) {
+            loadFile(file);
+            textOpened++;
+          } else {
+            skipped.push(file.name);
+          }
         }
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          insertImageMarkdown(file.name, ev.target.result);
-          showToast(t('toastImageInserted'));
-        };
-        reader.readAsDataURL(file);
-        return;
       }
-
-      showToast(t('toastDropUnsupported'));
+      if (skipped.length) {
+        showToast('已打开第 1 个，其余跳过：' + skipped.slice(0, 3).join(', ') + (skipped.length > 3 ? ' 等' + skipped.length + ' 个' : ''), 'info');
+      }
     });
 
     // 点击外部关闭下拉菜单

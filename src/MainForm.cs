@@ -61,9 +61,9 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16h patch: 46（AI 文档级工具：get_document_stats / read_all_lines /
-    //                  append_to_end / prepend_to_start；MAX_TOOL_ROUNDS 8 → 32）
-    private const string ResourcesVersion = "46";
+    // V0.16i patch: 47（拖拽白名单扩展到 30+ 文本扩展名 + 多文件支持；
+    //                  工作区文件树子文件夹可展开/收起，文件夹用 open/closed 图标区分）
+    private const string ResourcesVersion = "47";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
