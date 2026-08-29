@@ -61,9 +61,10 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16j patch: 48（关闭全部 tab：标签栏 × 按钮 + Ctrl+Shift+W 快捷键
-    //                  无 dirty 直接关，有 dirty 弹 3 态「保存全部/放弃/取消」）
-    private const string ResourcesVersion = "48";
+    // V0.16k patch: 49（折叠按钮箭头随可见性翻转：
+    //                  上卡片可见朝上、隐藏朝下；下卡片可见朝下、隐藏朝上。
+    //                  title 在 collapsePane / expandPane 之间切换）
+    private const string ResourcesVersion = "49";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

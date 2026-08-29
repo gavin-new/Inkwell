@@ -4503,6 +4503,32 @@
         el.style.display = cardsVisible[name] ? '' : 'none';
       }
 
+      // V0.16j: 同步更新 4 个折叠按钮的箭头方向 + title
+      // 顶部卡片（fileTree / preview）：可见时箭头朝上，隐藏时朝下
+      // 底部卡片（outline / ai）：可见时箭头朝下，隐藏时朝上
+      // 这样视觉上箭头永远指向"点我会发生什么"
+      const updateCollapseBtn = (id, isTop) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        const useEl = btn.querySelector('svg use');
+        const visible = id === 'file-tree-collapse-btn' ? cardsVisible.fileTree
+                     : id === 'outline-collapse-btn'   ? cardsVisible.outline
+                     : id === 'preview-collapse-btn'   ? cardsVisible.preview
+                     : cardsVisible.ai;
+        // 可见 → 顶部卡箭头朝上、底部卡箭头朝下（"点击折叠"）
+        // 隐藏 → 顶部卡箭头朝下、底部卡箭头朝上（"点击展开"）
+        const expandedHref = isTop ? '#icon-chevron-up' : '#icon-chevron-down';
+        const collapsedHref = isTop ? '#icon-chevron-down' : '#icon-chevron-up';
+        const targetHref = visible ? expandedHref : collapsedHref;
+        if (useEl) useEl.setAttribute('href', targetHref);
+        btn.setAttribute('title', visible ? t('collapsePane') : t('expandPane'));
+        btn.setAttribute('data-i18n-title', visible ? 'collapsePane' : 'expandPane');
+      };
+      updateCollapseBtn('file-tree-collapse-btn', true);   // 顶部
+      updateCollapseBtn('preview-collapse-btn',   true);   // 顶部
+      updateCollapseBtn('outline-collapse-btn',   false);  // 底部
+      updateCollapseBtn('ai-collapse-btn',        false);  // 底部
+
       // 5) 两张卡都在的一侧恢复保存的上下分割比例
       if (cardsVisible.fileTree && cardsVisible.outline) {
         applyHSplit('.left-pane', '.left-pane-top', '.left-pane-bottom', 'inkwell_left_split', 0.55);

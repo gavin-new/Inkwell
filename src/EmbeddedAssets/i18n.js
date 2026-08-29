@@ -173,6 +173,7 @@ const i18n = {
     openFolder: '打开文件夹',
     closeWorkspace: '关闭工作区',
     collapsePane: '折叠面板',
+    expandPane: '展开面板',
     outline: '大纲',
     outlineEmpty: '输入标题（# 开头）后自动生成',
 
@@ -358,6 +359,7 @@ mindmap
     openFolder: 'Open folder',
     closeWorkspace: 'Close workspace',
     collapsePane: 'Collapse pane',
+    expandPane: 'Expand pane',
     outline: 'Outline',
     outlineEmpty: 'Type # headings to generate outline',
     aiPaneTitle: 'AI Chat',
