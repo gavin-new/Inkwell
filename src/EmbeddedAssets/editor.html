@@ -3303,7 +3303,17 @@
 
     // 构造请求体（按协议分）
     function buildAiRequestBody(messages) {
-      const cleaned = messages.filter(m => m.role !== 'assistant' || m.content);
+      // 双重过滤：
+      // 1. 只保留 OpenAI 协议合法的 role（user / assistant / system）。
+      //    否则 UI 失败态的 'error' 角色（sendAiMessage catch 块改的）会被原样
+      //    发回 GLM → 1214 "角色信息不正确"（GLM 只认这三个 role）
+      // 2. 过滤掉空的 assistant 占位符（流式回复前先 push 一个 content:'' 占位）
+      const cleaned = messages.filter(m => {
+        if (!m) return false;
+        if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') return false;
+        if (m.role === 'assistant' && !m.content) return false;
+        return true;
+      });
       // 合并连续 system 消息：智谱 GLM / 部分国产模型只允许一个 system
       // （OpenAI 协议允许多个，但 1214 "角色信息不正确" 是国产模型常见报错）
       const merged = [];
@@ -3404,10 +3414,14 @@
       aiMessages.push({ role: 'assistant', content: '' });
       renderAiChat();
       try {
+        const reqBody = buildAiRequestBody(aiMessages);
+        // 调试：把实际发给模型的请求体打到控制台，
+        // 万一 1214 之类错误，可以直接复制去 curl 复现
+        if (typeof console !== 'undefined') console.log('[Inkwell AI →]', aiConfig.provider, aiCurrentModel, reqBody);
         const resp = await fetch(getAiBase() + (isOllamaProtocol() ? '/api/chat' : '/chat/completions'), {
           method: 'POST',
           headers: buildAiHeaders(),
-          body: JSON.stringify(buildAiRequestBody(aiMessages)),
+          body: JSON.stringify(reqBody),
         });
         let acc = '';
         await streamAiResponse(resp, (delta) => {
@@ -3492,10 +3506,12 @@
       // 流式替换选区
       let result = '';
       try {
+        const reqBody = buildAiRequestBody(messages);
+        if (typeof console !== 'undefined') console.log('[Inkwell AI →]', aiConfig.provider, aiCurrentModel, reqBody);
         const resp = await fetch(getAiBase() + (isOllamaProtocol() ? '/api/chat' : '/chat/completions'), {
           method: 'POST',
           headers: buildAiHeaders(),
-          body: JSON.stringify(buildAiRequestBody(messages)),
+          body: JSON.stringify(reqBody),
         });
         if (!resp.ok || !resp.body) {
           const errText = await resp.text().catch(() => '');

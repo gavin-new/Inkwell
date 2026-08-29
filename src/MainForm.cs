@@ -61,7 +61,9 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    private const string ResourcesVersion = "41";
+    // V0.16e patch: 42（1214 BUG 修复：buildAiRequestBody 过滤非标准 role
+    //                  + console.log 调试钩子）
+    private const string ResourcesVersion = "42";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
