@@ -61,9 +61,10 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16e patch: 43（智谱拆成"标准 API"和"编码套餐"两个独立 Provider 预设，
-    //                  baseurl 走 /api/paas/v4 vs /api/coding/paas/v4）
-    private const string ResourcesVersion = "43";
+    // V0.16e patch: 44（AI 工具调用 Function Calling：6 个工具
+    //                  get_outline/read_lines/find_text/replace_lines/
+    //                  replace_section/insert_after_heading，多轮循环）
+    private const string ResourcesVersion = "44";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 

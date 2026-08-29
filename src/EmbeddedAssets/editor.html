@@ -767,6 +767,27 @@
       text-align: center;
       margin: 0 auto;
     }
+    /* V0.16f: tool 角色消息样式（小灰条） */
+    .ai-msg.tool {
+      background: rgba(0, 122, 255, 0.08);
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-left: 2px solid var(--accent);
+      border-radius: 4px;
+      max-width: 95%;
+      word-break: break-word;
+    }
+    .ai-tool-summary {
+      display: block;
+      color: var(--text-muted);
+      font-size: 11px;
+      margin: 0 0 6px 0;
+      padding: 3px 6px;
+      background: rgba(0, 122, 255, 0.06);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
     .ai-msg pre {
       background: rgba(0, 0, 0, 0.05);
       padding: 6px 8px;
@@ -2037,6 +2058,7 @@
           <option value="glm_coding">智谱 GLM 编码套餐</option>
           <option value="qwen">通义千问 Qwen</option>
           <option value="kimi">Kimi 月之暗面</option>
+          <option value="grok">Grok (xAI)</option>
           <option value="ollama">本地 Ollama</option>
           <option value="custom">自定义</option>
         </select>
@@ -3074,6 +3096,7 @@
       glm_coding: { label: '智谱 GLM 编码套餐',   baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',       model: 'glm-5.3-flash', protocol: 'openai' },
       qwen:       { label: '通义千问 Qwen',       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo',    protocol: 'openai' },
       kimi:       { label: 'Kimi (月之暗面)',     baseUrl: 'https://api.moonshot.cn/v1',                        model: 'moonshot-v1-8k', protocol: 'openai' },
+      grok:       { label: 'Grok (xAI)',          baseUrl: 'https://api.x.ai/v1',                               model: 'grok-4-fast',   protocol: 'openai' },
       ollama:     { label: '本地 Ollama',         baseUrl: 'http://localhost:11434/v1',                        model: '',              protocol: 'ollama' },
       custom:     { label: '自定义',              baseUrl: '',                                                  model: '',              protocol: 'openai' },
     };
@@ -3283,11 +3306,43 @@
       }
       chat.innerHTML = '';
       for (const m of aiMessages) {
+        // V0.16f: tool 角色消息单独渲染（小灰条）
+        if (m.role === 'tool') {
+          const div = document.createElement('div');
+          div.className = 'ai-msg tool';
+          let resultText = m.content;
+          try {
+            const obj = JSON.parse(m.content);
+            if (obj.error) resultText = '⚠ ' + obj.error;
+            else if (obj.success) resultText = '✅ ' + (m.name || 'tool') + ' 完成';
+            else if (Array.isArray(obj.outline)) resultText = `✅ ${m.name}: ${obj.outline.length} 个标题`;
+            else if (Array.isArray(obj.lines)) resultText = `✅ ${m.name}: ${obj.lines.length} 行`;
+            else if (Array.isArray(obj.matches)) resultText = `✅ ${m.name}: ${obj.matches.length} 处匹配`;
+            else resultText = `✅ ${m.name}: ${Object.keys(obj).length} 字段`;
+          } catch {}
+          div.innerHTML = '<svg class="icon" style="width:12px;height:12px;vertical-align:-2px;opacity:0.6;"><use href="#icon-wrench"></use></svg> ' + escapeHtml(resultText);
+          chat.appendChild(div);
+          continue;
+        }
         const div = document.createElement('div');
         div.className = 'ai-msg ' + (m.role === 'user' ? 'user' : (m.role === 'assistant' ? 'assistant' : 'system'));
         const roleLabel = m.role === 'user' ? t('aiRoleUser') : (m.role === 'assistant' ? t('aiRoleAssistant') : '');
+        // V0.16f: assistant 消息若含 tool_calls，先展示工具调用摘要
+        let toolSummary = '';
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+          const lines = m.tool_calls.map((tc) => {
+            const fn = tc.function || {};
+            let args = {};
+            try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : (fn.arguments || {}); } catch {}
+            // 只显示关键字段，避免太长
+            const keys = Object.keys(args).slice(0, 3);
+            const argStr = keys.map(k => k + '=' + JSON.stringify(args[k]).slice(0, 40)).join(', ');
+            return `🔧 ${fn.name}(${argStr}${Object.keys(args).length > 3 ? ', …' : ''})`;
+          });
+          toolSummary = '<div class="ai-tool-summary">' + escapeHtml(lines.join(' · ')) + '</div>';
+        }
         div.innerHTML = (roleLabel ? '<strong>' + escapeHtml(roleLabel) + ':</strong> ' : '') +
-          escapeHtml(m.content).replace(/\n/g, '<br>');
+          toolSummary + escapeHtml(m.content || '').replace(/\n/g, '<br>');
         chat.appendChild(div);
       }
       chat.scrollTop = chat.scrollHeight;
@@ -3336,23 +3391,30 @@
       if (sysBuf.length) {
         merged.push({ role: 'system', content: sysBuf.join('\n\n') });
       }
-      if (isOllamaProtocol()) {
-        return {
-          model: aiCurrentModel,
-          messages: merged,
-          stream: true,
-        };
-      }
-      // OpenAI 协议
-      return {
+      // V0.16f: 把 6 个工具塞进请求体（OpenAI 协议）
+      // 不支持 function calling 的模型会忽略 tools 字段，正常聊天
+      const body = {
         model: aiCurrentModel,
         messages: merged,
         stream: true,
-        temperature: typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.7,
+        tools: AI_TOOLS,
+        tool_choice: 'auto',
       };
+      if (isOllamaProtocol()) {
+        // Ollama /api/chat 也支持 tools 字段（OpenAI 同格式）
+        return body;
+      }
+      // OpenAI 协议
+      body.temperature = typeof aiConfig.temperature === 'number' ? aiConfig.temperature : 0.7;
+      return body;
     }
 
     // 流式解析（Ollama NDJSON 或 OpenAI SSE）
+    // 返回 { content, tool_calls, finish_reason }：
+    //   - content: 累积的文本内容
+    //   - tool_calls: 按 index 累积的工具调用数组（OpenAI 协议是 string arguments 增量，
+    //                 Ollama 是一次性 object arguments，这里统一规范化）
+    //   - onDelta: 每收到一个内容片段时回调，用于 UI 实时更新
     async function streamAiResponse(resp, onDelta) {
       if (!resp.ok || !resp.body) {
         const errText = await resp.text().catch(() => '');
@@ -3361,6 +3423,10 @@
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
+      let content = '';
+      const toolCallsByIndex = {}; // { 0: { id, type, function: { name, arguments: '' } } }
+      let finishReason = null;
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -3375,8 +3441,27 @@
             if (!line) continue;
             try {
               const j = JSON.parse(line);
-              const d = j.message?.content || '';
-              if (d) onDelta(d);
+              if (j.done) finishReason = 'stop';
+              const msg = j.message || {};
+              const d = msg.content || '';
+              if (d) {
+                content += d;
+                if (onDelta) onDelta(d);
+              }
+              // Ollama 一次性返回完整 tool_calls（不分块）
+              if (Array.isArray(msg.tool_calls)) {
+                for (let i = 0; i < msg.tool_calls.length; i++) {
+                  const tc = msg.tool_calls[i];
+                  const fn = tc.function || {};
+                  // Ollama 的 arguments 通常是 object，规范化成 string
+                  const argStr = typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments || {});
+                  toolCallsByIndex[i] = {
+                    id: tc.id || ('ollama_call_' + i + '_' + Date.now()),
+                    type: 'function',
+                    function: { name: fn.name || '', arguments: argStr },
+                  };
+                }
+              }
             } catch {}
           }
         } else {
@@ -3391,13 +3476,319 @@
             if (payload === '[DONE]') continue;
             try {
               const j = JSON.parse(payload);
-              const d = j.choices?.[0]?.delta?.content || '';
-              if (d) onDelta(d);
+              const choice = j.choices?.[0];
+              if (!choice) continue;
+              if (choice.finish_reason) finishReason = choice.finish_reason;
+              const delta = choice.delta || {};
+              const d = delta.content || '';
+              if (d) {
+                content += d;
+                if (onDelta) onDelta(d);
+              }
+              // 累积 tool_calls：按 index 拼接
+              if (Array.isArray(delta.tool_calls)) {
+                for (const tc of delta.tool_calls) {
+                  const idx = tc.index ?? 0;
+                  if (!toolCallsByIndex[idx]) {
+                    toolCallsByIndex[idx] = {
+                      id: '',
+                      type: 'function',
+                      function: { name: '', arguments: '' },
+                    };
+                  }
+                  const slot = toolCallsByIndex[idx];
+                  if (tc.id) slot.id = tc.id;
+                  if (tc.type) slot.type = tc.type;
+                  if (tc.function?.name) slot.function.name += tc.function.name;
+                  if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+                }
+              }
             } catch {}
           }
         }
       }
+
+      const toolCalls = Object.keys(toolCallsByIndex)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => toolCallsByIndex[k]);
+
+      return { content, tool_calls: toolCalls, finish_reason: finishReason };
     }
+
+    // ========== V0.16f: AI 工具调用（Function Calling） ==========
+    //
+    // 让 AI 能在聊天里直接操作编辑器：读行、替换、章节改写、按标题插入等。
+    // 协议：OpenAI tools 格式（智谱/DeepSeek/Qwen/Kimi/GPT/Grok 都支持）。
+    // 旧模型不支持则忽略 tools 字段，等同于普通聊天。
+    //
+    // 用法：用户说"把第 3 段润色一下"或"在 介绍 这节加一句……"，
+    // AI 自动调 get_outline → replace_section / replace_lines 等，
+    // Inkwell 执行后把结果回喂给 AI，多轮直到 AI 给出最终回复。
+
+    const TOOL_SYSTEM_PROMPT = '你可以使用以下工具直接读取和修改编辑区内容，所有修改会自动写入撤销栈（Ctrl+Z 可恢复）：\n' +
+      '- get_outline: 查看文档大纲（所有标题及层级），多步编辑前建议先调用\n' +
+      '- read_lines(start_line, end_line): 读指定行范围（1-indexed，闭区间）\n' +
+      '- find_text(query): 查找文本在哪些行出现，返回行号和片段\n' +
+      '- replace_lines(start_line, end_line, new_content): 替换指定行范围\n' +
+      '- replace_section(heading, new_content): 替换某个标题下的整个章节内容（标题本身保留）\n' +
+      '- insert_after_heading(heading, content, position): 在标题附近插入内容；position 可选 after/before/append\n' +
+      '每次工具调用后你会收到 JSON 结果，结果作为上下文继续。完成所有编辑后用一句简短中文告诉用户改了什么。';
+
+    // 工具定义（OpenAI tools 格式）
+    const AI_TOOLS = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_outline',
+          description: '获取当前文档的大纲（所有 Markdown 标题及其行号和层级）。多步编辑前建议先调用了解结构。',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'read_lines',
+          description: '读取文档指定行范围的内容。行号 1-indexed，包含 start_line 和 end_line。返回每行的行号和内容。',
+          parameters: {
+            type: 'object',
+            properties: {
+              start_line: { type: 'integer', minimum: 1, description: '起始行号（包含）' },
+              end_line: { type: 'integer', minimum: 1, description: '结束行号（包含）' },
+            },
+            required: ['start_line', 'end_line'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'find_text',
+          description: '在文档中查找文本，返回所有匹配的行号和上下文片段。最多返回 20 条。',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: '要查找的文本（精确匹配，不是正则）' },
+              case_sensitive: { type: 'boolean', description: '是否区分大小写，默认 false', default: false },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'replace_lines',
+          description: '替换文档中指定行范围（1-indexed，闭区间）的内容。new_content 用 \\n 分隔多行。修改会自动写入撤销栈。',
+          parameters: {
+            type: 'object',
+            properties: {
+              start_line: { type: 'integer', minimum: 1, description: '起始行号（包含）' },
+              end_line: { type: 'integer', minimum: 1, description: '结束行号（包含）' },
+              new_content: { type: 'string', description: '新的内容（多行用 \\n 分隔）' },
+            },
+            required: ['start_line', 'end_line', 'new_content'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'replace_section',
+          description: '替换指定标题下的整个章节内容（不含标题本身，标题和子标题之间的正文部分）。heading 支持模糊匹配（包含关系）。修改会自动写入撤销栈。',
+          parameters: {
+            type: 'object',
+            properties: {
+              heading: { type: 'string', description: '标题文字（部分匹配即可）' },
+              new_content: { type: 'string', description: '新的章节内容（不含标题本身）' },
+            },
+            required: ['heading', 'new_content'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'insert_after_heading',
+          description: '在指定标题附近插入新内容。position 默认 "after"（紧跟标题后），可选 "before"（标题前）或 "append"（章节末尾，下一个同级/更高级标题之前）。',
+          parameters: {
+            type: 'object',
+            properties: {
+              heading: { type: 'string', description: '标题文字（部分匹配）' },
+              content: { type: 'string', description: '要插入的内容（多行用 \\n 分隔）' },
+              position: { type: 'string', enum: ['after', 'before', 'append'], description: '插入位置：after / before / append，默认 after' },
+            },
+            required: ['heading', 'content'],
+          },
+        },
+      },
+    ];
+
+    // 工具执行器：每个 handler 接收 parsed args，返回结果对象（成功或 {error}）。
+    // 所有写操作都走 pushHistory()，让 Ctrl+Z 能撤销。
+    const TOOL_HANDLERS = {
+      get_outline: () => {
+        const lines = editor.value.split('\n');
+        const outline = [];
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+          if (m) {
+            outline.push({ line: i + 1, level: m[1].length, text: m[2].trim() });
+          }
+        }
+        return { total_lines: lines.length, outline };
+      },
+
+      read_lines: ({ start_line, end_line } = {}) => {
+        if (typeof start_line !== 'number' || typeof end_line !== 'number') {
+          return { error: 'start_line 和 end_line 必须是整数' };
+        }
+        const lines = editor.value.split('\n');
+        if (start_line < 1 || end_line > lines.length || start_line > end_line) {
+          return { error: `行号越界（文档共 ${lines.length} 行，查询 ${start_line}-${end_line}）` };
+        }
+        const slice = [];
+        for (let i = start_line - 1; i < end_line; i++) {
+          slice.push({ line: i + 1, content: lines[i] });
+        }
+        return { start_line, end_line, lines: slice };
+      },
+
+      find_text: ({ query, case_sensitive } = {}) => {
+        if (typeof query !== 'string' || !query) {
+          return { error: 'query 必须是非空字符串' };
+        }
+        const lines = editor.value.split('\n');
+        const q = case_sensitive ? query : query.toLowerCase();
+        const matches = [];
+        for (let i = 0; i < lines.length; i++) {
+          const line = case_sensitive ? lines[i] : lines[i].toLowerCase();
+          let idx = 0;
+          while ((idx = line.indexOf(q, idx)) !== -1) {
+            matches.push({ line: i + 1, col: idx + 1, snippet: lines[i].slice(Math.max(0, idx - 20), idx + query.length + 20) });
+            idx += q.length;
+            if (matches.length >= 20) break;
+          }
+          if (matches.length >= 20) break;
+        }
+        return { query, count: matches.length, matches };
+      },
+
+      replace_lines: ({ start_line, end_line, new_content } = {}) => {
+        if (typeof start_line !== 'number' || typeof end_line !== 'number' || typeof new_content !== 'string') {
+          return { error: '参数缺失或类型错误：需要 start_line(整数), end_line(整数), new_content(字符串)' };
+        }
+        const lines = editor.value.split('\n');
+        if (start_line < 1 || end_line > lines.length || start_line > end_line) {
+          return { error: `行号越界（文档共 ${lines.length} 行，查询 ${start_line}-${end_line}）` };
+        }
+        pushHistory();
+        const before = lines.slice(0, start_line - 1);
+        const after = lines.slice(end_line);
+        const newLines = new_content.split('\n');
+        editor.value = [...before, ...newLines, ...after].join('\n');
+        // 同步下游：预览/字数/大纲/自动保存
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return { success: true, replaced_lines: end_line - start_line + 1, new_total_lines: editor.value.split('\n').length };
+      },
+
+      replace_section: ({ heading, new_content } = {}) => {
+        if (typeof heading !== 'string' || typeof new_content !== 'string') {
+          return { error: '参数缺失：需要 heading(字符串), new_content(字符串)' };
+        }
+        const lines = editor.value.split('\n');
+        const headingLower = heading.toLowerCase();
+        let headingIdx = -1;
+        let headingLevel = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+          if (m && m[2].toLowerCase().includes(headingLower)) {
+            headingIdx = i;
+            headingLevel = m[1].length;
+            break;
+          }
+        }
+        if (headingIdx === -1) {
+          return { error: `找不到标题包含 "${heading}"。可以先用 get_outline 查看现有标题。` };
+        }
+        // 找本节结束（下一个同级或更高级标题）
+        let endIdx = lines.length;
+        for (let i = headingIdx + 1; i < lines.length; i++) {
+          const m = lines[i].match(/^(#{1,6})\s/);
+          if (m && m[1].length <= headingLevel) { endIdx = i; break; }
+        }
+        pushHistory();
+        const before = lines.slice(0, headingIdx + 1); // 包含标题
+        const after = lines.slice(endIdx);
+        const newLines = new_content.split('\n');
+        // 标题行和新内容之间留一个空行（除非 new_content 已经是空行开头）
+        if (newLines.length > 0 && newLines[0].trim() !== '') {
+          newLines.unshift('');
+        }
+        editor.value = [...before, ...newLines, ...after].join('\n');
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return { success: true, heading: lines[headingIdx], replaced_lines: endIdx - headingIdx - 1 };
+      },
+
+      insert_after_heading: ({ heading, content, position } = {}) => {
+        if (typeof heading !== 'string' || typeof content !== 'string') {
+          return { error: '参数缺失：需要 heading(字符串), content(字符串)' };
+        }
+        const lines = editor.value.split('\n');
+        const headingLower = heading.toLowerCase();
+        let headingIdx = -1;
+        let headingLevel = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+          if (m && m[2].toLowerCase().includes(headingLower)) {
+            headingIdx = i;
+            headingLevel = m[1].length;
+            break;
+          }
+        }
+        if (headingIdx === -1) {
+          return { error: `找不到标题包含 "${heading}"。可以先用 get_outline 查看现有标题。` };
+        }
+        const pos = position || 'after';
+        let insertIdx;
+        if (pos === 'before') {
+          insertIdx = headingIdx;
+        } else if (pos === 'append') {
+          // 找本节结束
+          let endIdx = lines.length;
+          for (let i = headingIdx + 1; i < lines.length; i++) {
+            const m = lines[i].match(/^(#{1,6})\s/);
+            if (m && m[1].length <= headingLevel) { endIdx = i; break; }
+          }
+          insertIdx = endIdx;
+        } else {
+          // after (default)
+          insertIdx = headingIdx + 1;
+        }
+        pushHistory();
+        const newLines = content.split('\n');
+        const before = lines.slice(0, insertIdx);
+        const after = lines.slice(insertIdx);
+        // 在 before 末尾 + content + after 之间补空行，保持排版整洁
+        if (before.length > 0 && before[before.length - 1].trim() !== '' && newLines[0]?.trim() !== '') {
+          newLines.unshift('');
+        }
+        if (newLines.length > 0 && after.length > 0 && after[0].trim() !== '' && newLines[newLines.length - 1].trim() !== '') {
+          newLines.push('');
+        }
+        editor.value = [...before, ...newLines, ...after].join('\n');
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return { success: true, heading: lines[headingIdx], position: pos, inserted_lines: content.split('\n').length };
+      },
+    };
 
     async function sendAiMessage() {
       const input = document.getElementById('ai-input');
@@ -3409,33 +3800,98 @@
         return;
       }
       aiMessages.push({ role: 'user', content: text });
+      // 第一次发消息时，自动注入工具使用说明到 system 段。
+      // buildAiRequestBody 会合并连续 system，所以重复发消息不会重复注入。
+      if (!aiMessages.some(m => m.role === 'system' && (m.content || '').includes('get_outline'))) {
+        aiMessages.unshift({ role: 'system', content: TOOL_SYSTEM_PROMPT });
+      }
       input.value = '';
       aiBusy = true;
       const sendBtn = document.getElementById('ai-send-btn');
       sendBtn.disabled = true;
       sendBtn.textContent = t('sending');
       renderAiChat();
+      // 初始占位 assistant 消息（多轮循环里会被复用为"当前轮 assistant"）
       aiMessages.push({ role: 'assistant', content: '' });
       renderAiChat();
+
+      const MAX_TOOL_ROUNDS = 8; // 防止 AI 死循环
+      let round = 0;
+      let lastError = null;
+
       try {
-        const reqBody = buildAiRequestBody(aiMessages);
-        // 调试：把实际发给模型的请求体打到控制台，
-        // 万一 1214 之类错误，可以直接复制去 curl 复现
-        if (typeof console !== 'undefined') console.log('[Inkwell AI →]', aiConfig.provider, aiCurrentModel, reqBody);
-        const resp = await fetch(getAiBase() + (isOllamaProtocol() ? '/api/chat' : '/chat/completions'), {
-          method: 'POST',
-          headers: buildAiHeaders(),
-          body: JSON.stringify(reqBody),
-        });
-        let acc = '';
-        await streamAiResponse(resp, (delta) => {
-          acc += delta;
-          aiMessages[aiMessages.length - 1].content = acc;
+        while (round < MAX_TOOL_ROUNDS) {
+          round++;
+          const assistantMsg = aiMessages[aiMessages.length - 1];
+
+          const reqBody = buildAiRequestBody(aiMessages);
+          if (typeof console !== 'undefined') console.log('[Inkwell AI →]', aiConfig.provider, aiCurrentModel, 'tools:', (reqBody.tools || []).length, 'round:', round);
+          const resp = await fetch(getAiBase() + (isOllamaProtocol() ? '/api/chat' : '/chat/completions'), {
+            method: 'POST',
+            headers: buildAiHeaders(),
+            body: JSON.stringify(reqBody),
+          });
+
+          let acc = '';
+          const { content, tool_calls } = await streamAiResponse(resp, (delta) => {
+            acc += delta;
+            assistantMsg.content = acc;
+            renderAiChat();
+          });
+
+          // 写回这一轮 assistant 消息
+          assistantMsg.content = content || '';
+          if (tool_calls && tool_calls.length > 0) {
+            assistantMsg.tool_calls = tool_calls;
+          }
           renderAiChat();
-        });
+
+          // 没有 tool_calls → 流式正常结束，退出循环
+          if (!tool_calls || tool_calls.length === 0) {
+            break;
+          }
+
+          // 执行每个 tool_call，把结果以 role:'tool' 回喂给 AI
+          for (const call of tool_calls) {
+            const fn = call.function || {};
+            let args = {};
+            if (typeof fn.arguments === 'string') {
+              try { args = JSON.parse(fn.arguments || '{}'); } catch (e) {
+                args = { __parse_error: e.message, __raw: fn.arguments };
+              }
+            } else if (fn.arguments && typeof fn.arguments === 'object') {
+              args = fn.arguments;
+            }
+            const handler = TOOL_HANDLERS[fn.name];
+            let result;
+            if (!handler) {
+              result = { error: '未知工具: ' + fn.name };
+            } else {
+              try { result = handler(args); }
+              catch (e) { result = { error: '执行失败: ' + (e.message || e) }; }
+            }
+            aiMessages.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: fn.name,
+              content: JSON.stringify(result),
+            });
+            renderAiChat();
+          }
+
+          // 准备下一轮：再 push 一个空的 assistant 占位
+          aiMessages.push({ role: 'assistant', content: '' });
+          renderAiChat();
+        }
+
+        if (round >= MAX_TOOL_ROUNDS) {
+          showToast('AI 工具调用超过 ' + MAX_TOOL_ROUNDS + ' 轮，已自动停止', 'warn');
+        }
       } catch (e) {
-        aiMessages[aiMessages.length - 1].content = '⚠ ' + (e.message || e);
-        aiMessages[aiMessages.length - 1].role = 'error';
+        lastError = e;
+        const last = aiMessages[aiMessages.length - 1];
+        last.content = '⚠ ' + (e.message || e);
+        last.role = 'error';
         renderAiChat();
       } finally {
         aiBusy = false;
