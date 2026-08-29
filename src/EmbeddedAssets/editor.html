@@ -2033,14 +2033,15 @@
         <select id="ai-provider" onchange="onAiProviderChange()" style="width:100%;padding:9px 12px;border:1px solid transparent;border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;margin-bottom:6px;">
           <option value="openai">OpenAI</option>
           <option value="deepseek">DeepSeek</option>
-          <option value="glm">智谱 GLM</option>
+          <option value="glm">智谱 GLM 标准 API</option>
+          <option value="glm_coding">智谱 GLM 编码套餐</option>
           <option value="qwen">通义千问 Qwen</option>
           <option value="kimi">Kimi 月之暗面</option>
           <option value="ollama">本地 Ollama</option>
           <option value="custom">自定义</option>
         </select>
         <div style="font-size:11px;color:var(--text-muted);margin:-2px 0 12px 2px;line-height:1.5;" data-i18n="aiProviderHint">
-          选服务商会自动填上 baseUrl 和默认模型。OpenAI 协议覆盖 80% 厂商。
+          选服务商会自动填上 baseUrl 和默认模型。智谱分两个："标准 API" 走按量余额，"编码套餐" 走 Coding Plan 订阅（baseurl 不同），key 不通用。
         </div>
 
         <label for="ai-api-url" data-i18n="aiApiUrl">API 端点（Base URL）</label>
@@ -3064,14 +3065,17 @@
     // 旧版本（V0.12）的 localStorage 配置会在首次启动时自动迁移
 
     // 预置 Provider 配置（点设置面板下拉时自动填 URL/Model）
+    // 智谱 GLM 拆成两个：标准 API（按量计费，任意工具可用）和 编码套餐（Coding Plan
+    // 订阅，baseurl 是 /api/coding/paas/v4）。两个 key 不通用，错了会 1113 余额不足。
     const AI_PROVIDERS = {
-      openai:   { label: 'OpenAI',           baseUrl: 'https://api.openai.com/v1',                     model: 'gpt-4o-mini',  protocol: 'openai' },
-      deepseek: { label: 'DeepSeek',         baseUrl: 'https://api.deepseek.com/v1',                  model: 'deepseek-chat', protocol: 'openai' },
-      glm:      { label: '智谱 GLM',         baseUrl: 'https://open.bigmodel.cn/api/paas/v4',        model: 'glm-4-flash',   protocol: 'openai' },
-      qwen:     { label: '通义千问 Qwen',     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo',   protocol: 'openai' },
-      kimi:     { label: 'Kimi (月之暗面)',   baseUrl: 'https://api.moonshot.cn/v1',                   model: 'moonshot-v1-8k', protocol: 'openai' },
-      ollama:   { label: '本地 Ollama',       baseUrl: 'http://localhost:11434/v1',                   model: '',               protocol: 'ollama' },
-      custom:   { label: '自定义',            baseUrl: '',                                            model: '',               protocol: 'openai' },
+      openai:     { label: 'OpenAI',             baseUrl: 'https://api.openai.com/v1',                          model: 'gpt-4o-mini',   protocol: 'openai' },
+      deepseek:   { label: 'DeepSeek',           baseUrl: 'https://api.deepseek.com/v1',                       model: 'deepseek-chat', protocol: 'openai' },
+      glm:        { label: '智谱 GLM 标准 API',   baseUrl: 'https://open.bigmodel.cn/api/paas/v4',              model: 'glm-4-flash',   protocol: 'openai' },
+      glm_coding: { label: '智谱 GLM 编码套餐',   baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',       model: 'glm-5.3-flash', protocol: 'openai' },
+      qwen:       { label: '通义千问 Qwen',       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo',    protocol: 'openai' },
+      kimi:       { label: 'Kimi (月之暗面)',     baseUrl: 'https://api.moonshot.cn/v1',                        model: 'moonshot-v1-8k', protocol: 'openai' },
+      ollama:     { label: '本地 Ollama',         baseUrl: 'http://localhost:11434/v1',                        model: '',              protocol: 'ollama' },
+      custom:     { label: '自定义',              baseUrl: '',                                                  model: '',              protocol: 'openai' },
     };
 
     const DEFAULT_AI_CONFIG = {
