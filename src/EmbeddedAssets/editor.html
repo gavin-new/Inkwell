@@ -1694,6 +1694,8 @@
       <symbol id="icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></symbol>
       <symbol id="icon-upload-cloud" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path></symbol>
       <symbol id="icon-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></symbol>
+      <!-- V0.16j: 修复工作区卡片折叠箭头不显示（之前漏定义 chevron-up） -->
+      <symbol id="icon-chevron-up" viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></symbol>
       <symbol id="icon-maximize" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M21 8V5a2 2 0 0 0-2-2h-3"></path><path d="M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></symbol>
       <symbol id="icon-mermaid" viewBox="0 0 24 24">
         <circle cx="12" cy="5" r="3"></circle>
@@ -2893,6 +2895,8 @@
         </div>`;
       });
       parts.push('<button class="tab-add" title="新建空白文件 Ctrl+N" data-tab-add="1">+</button>');
+      // V0.16j: 关闭全部按钮（hover 时显示"× ×"，避免平时抢眼）
+      parts.push('<button class="tab-close-all" title="关闭全部标签 Ctrl+Shift+W" data-tab-close-all="1">×</button>');
       container.innerHTML = parts.join('');
       // 事件绑定（用 addEventListener，path 通过 dataset 传，避免反斜杠转义问题）
       container.querySelectorAll('.editor-tab').forEach(el => {
@@ -2909,6 +2913,8 @@
       });
       const addBtn = container.querySelector('[data-tab-add]');
       if (addBtn) addBtn.addEventListener('click', newFile);
+      const closeAllBtn = container.querySelector('[data-tab-close-all]');
+      if (closeAllBtn) closeAllBtn.addEventListener('click', closeAllTabs);
     }
 
     // V0.16: tab 点击 - 切到该 tab
@@ -3026,6 +3032,78 @@
       // 无 bridge 降级
       return Promise.resolve(window.confirm(message + '\n\n确定=保存并关闭  取消=不保存关闭')
         ? 'save' : 'discard');
+    }
+
+    // V0.16j: 关闭全部 tab
+    // - 0 dirty：直接关
+    // - 1+ dirty：弹 3 态（保存全部 / 放弃修改 / 取消）
+    //   保存全部时逐个调 saveToLocal()，任何一个保存失败就中止关闭
+    async function closeAllTabs() {
+      if (!tabOrder.length) return;
+      // 先把当前 active tab 的最新内容同步到 Map
+      if (activeTabPath && openTabs.has(activeTabPath)) {
+        const cur = openTabs.get(activeTabPath);
+        if (cur.format !== 'docx') cur.content = editor.value;
+      }
+      const dirtyPaths = tabOrder.filter(p => {
+        const t = openTabs.get(p);
+        return t && t.dirty && t.format !== 'docx';  // docx 只读不算 dirty
+      });
+      // 没有 dirty：直接关
+      if (dirtyPaths.length === 0) {
+        finalizeCloseAllTabs();
+        showToast('已关闭全部标签');
+        return;
+      }
+      // 有 dirty：3 态确认
+      const preview = dirtyPaths.slice(0, 8).map(p => '  • ' + (openTabs.get(p)?.fileName || p)).join('\n');
+      const more = dirtyPaths.length > 8 ? `\n  …等共 ${dirtyPaths.length} 个` : '';
+      const choice = await showConfirm3(
+        `以下文件有未保存的修改：\n${preview}${more}\n\n点 "保存" 会逐个保存后关闭全部；\n点 "放弃" 直接关闭不保存。`,
+        '关闭全部文档',
+        { save: '保存全部', discard: '放弃修改', cancel: '取消' }
+      );
+      if (choice === 'cancel') return;
+      if (choice === 'save') {
+        // 逐个保存（先保存当前内容，再切换到下一个）
+        const originalActive = activeTabPath;
+        for (const path of [...dirtyPaths]) {
+          if (!openTabs.has(path)) continue;  // 可能用户中途取消了
+          switchTab(path);
+          await saveToLocal();
+          const t = openTabs.get(path);
+          if (t && t.dirty && t.format !== 'docx') {
+            // 保存失败（dirty 仍 true），中止关闭
+            showToast('保存失败，已中止关闭', 'error');
+            return;
+          }
+        }
+        // 切回原来的 active（如果有）
+        if (originalActive && openTabs.has(originalActive)) {
+          switchTab(originalActive);
+        }
+      }
+      // 'discard' 或 'save' 成功 → 关闭全部
+      finalizeCloseAllTabs();
+      showToast(`已关闭全部标签（${dirtyPaths.length} 个未保存）`, 'info');
+    }
+
+    function finalizeCloseAllTabs() {
+      openTabs.clear();
+      tabOrder = [];
+      activeTabPath = null;
+      currentFilePath = null;
+      editor.value = '';
+      currentDocxBase64 = '';
+      currentFileFormat = 'md';
+      currentFileLineEnding = 'lf';
+      currentFileHasFinalNewline = true;
+      renderTabs();
+      saveTabsToStorage();
+      try { localStorage.removeItem(ACTIVE_TAB_KEY); } catch {}
+      updateWindowTitle();
+      if (typeof updatePreview === 'function') updatePreview();
+      if (typeof updateCount === 'function') updateCount();
     }
 
     // V0.16: 持久化 tab 列表（只存 path + lastSaved，不存内容）
@@ -5066,6 +5144,22 @@
         }
         .tab-add:hover {
           color: var(--accent);
+          background: var(--surface-hover);
+        }
+        /* V0.16j: 关闭全部标签按钮（× × 风格，平时低调，hover 时变色） */
+        .tab-close-all {
+          padding: 4px 8px;
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 13px;
+          flex-shrink: 0;
+          margin-left: 2px;
+          border-left: 1px solid var(--border);
+        }
+        .tab-close-all:hover {
+          color: var(--danger);
           background: var(--surface-hover);
         }
         /* V0.16: 文件树多根工作区分段 */
@@ -7230,6 +7324,10 @@ ${'</scr' + 'ipt>'}
           // V0.16e 补丁: Ctrl+W 关当前 tab（走 closeTab 完整流程，dirty tab 会弹保存对话框）
           e.preventDefault();
           if (activeTabPath) closeTab(activeTabPath);
+        } else if (e.key === 'W' && e.shiftKey) {
+          // V0.16j: Ctrl+Shift+W 关闭全部 tab
+          e.preventDefault();
+          closeAllTabs();
         } else if (e.key === 'n' && !e.shiftKey) {
           // V0.16e 补丁: Ctrl+N 新建空白文件
           e.preventDefault();
