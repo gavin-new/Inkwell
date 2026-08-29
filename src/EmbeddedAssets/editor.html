@@ -3532,6 +3532,8 @@
       '- replace_lines(start_line, end_line, new_content): 替换指定行范围\n' +
       '- replace_section(heading, new_content): 替换某个标题下的整个章节内容（标题本身保留）\n' +
       '- insert_after_heading(heading, content, position): 在标题附近插入内容；position 可选 after/before/append\n' +
+      '- replace_selection(new_content): 替换用户当前光标选中的文字（用户在系统提示中会告诉你选区内容）\n' +
+      '用户的消息里如果带了【当前用户选区】块，说明他在编辑器里选中了一段文字，按指令改完后用 replace_selection 替换即可。' +
       '每次工具调用后你会收到 JSON 结果，结果作为上下文继续。完成所有编辑后用一句简短中文告诉用户改了什么。';
 
     // 工具定义（OpenAI tools 格式）
@@ -3618,6 +3620,20 @@
               position: { type: 'string', enum: ['after', 'before', 'append'], description: '插入位置：after / before / append，默认 after' },
             },
             required: ['heading', 'content'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'replace_selection',
+          description: '替换编辑器中用户当前光标选中的文字。如果用户没有选区（start==end），返回错误提示。改完后自动写入撤销栈，Ctrl+Z 可恢复。',
+          parameters: {
+            type: 'object',
+            properties: {
+              new_content: { type: 'string', description: '替换选区的新内容（多行用 \\n 分隔）' },
+            },
+            required: ['new_content'],
           },
         },
       },
@@ -3788,6 +3804,33 @@
         if (typeof autoSave === 'function') autoSave();
         return { success: true, heading: lines[headingIdx], position: pos, inserted_lines: content.split('\n').length };
       },
+
+      // V0.16g: 替换用户当前光标选区
+      // 比 replace_lines 更精准：直接用 selectionStart/End 定位，不需要 AI 算行号
+      replace_selection: ({ new_content } = {}) => {
+        if (typeof new_content !== 'string') {
+          return { error: '参数缺失：需要 new_content(字符串)' };
+        }
+        const el = typeof getActiveEditor === 'function' ? getActiveEditor() : editor;
+        const start = el.selectionStart, end = el.selectionEnd;
+        if (start === end) {
+          return { error: '当前没有选区。请先在编辑器里用鼠标拖动选中要编辑的文字。' };
+        }
+        const oldLen = end - start;
+        pushHistory();
+        el.setRangeText(new_content, start, end, 'select');
+        // 同步下游：预览/字数/大纲/自动保存
+        if (typeof updatePreview === 'function') updatePreview();
+        if (typeof updateCount === 'function') updateCount();
+        if (typeof scheduleOutlineUpdate === 'function') scheduleOutlineUpdate();
+        if (typeof autoSave === 'function') autoSave();
+        return {
+          success: true,
+          replaced_chars: oldLen,
+          new_chars: new_content.length,
+          preview: new_content.length <= 80 ? new_content : (new_content.slice(0, 80) + '…'),
+        };
+      },
     };
 
     async function sendAiMessage() {
@@ -3800,6 +3843,22 @@
         return;
       }
       aiMessages.push({ role: 'user', content: text });
+      // V0.16g: 如果用户在编辑器里选了文字，把选区内容作为 system 上下文注入。
+      // AI 看到【当前用户选区】块就知道要改什么，调 replace_selection 就能直接改。
+      // 注意：snapshot 是发送瞬间的选区，AI 也通过 selectionStart/End 实时定位。
+      const el = typeof getActiveEditor === 'function' ? getActiveEditor() : editor;
+      const selStart = el.selectionStart, selEnd = el.selectionEnd;
+      if (selStart !== selEnd) {
+        const selectedText = el.value.slice(selStart, selEnd);
+        if (selectedText.trim()) {
+          aiMessages.push({
+            role: 'system',
+            content: '【当前用户选区】（共 ' + (selEnd - selStart) + ' 个字符）\n' +
+              '```\n' + selectedText + '\n```\n' +
+              '【/选区】用户希望对这个选区进行操作，请用 replace_selection 工具改写并替换。',
+          });
+        }
+      }
       // 第一次发消息时，自动注入工具使用说明到 system 段。
       // buildAiRequestBody 会合并连续 system，所以重复发消息不会重复注入。
       if (!aiMessages.some(m => m.role === 'system' && (m.content || '').includes('get_outline'))) {
