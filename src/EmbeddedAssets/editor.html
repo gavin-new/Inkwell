@@ -3657,10 +3657,16 @@
     // Inkwell 执行后把结果回喂给 AI，多轮直到 AI 给出最终回复。
 
     const TOOL_SYSTEM_PROMPT = '你可以使用以下工具直接读取和修改编辑区内容，所有修改会自动写入撤销栈（Ctrl+Z 可恢复）：\n' +
-      '- get_document_stats: 拿文档规模（行数/字符数/标题列表/段落数），第一次接触文档时建议先调\n' +
+      '\n【按用户意图选工具】\n' +
+      '- 用户说"读/看/总结/分析/翻译/改X段/写了什么/讲了什么" → 必须先 read_all_lines（< 2000 行）或 read_lines 分块（> 2000 行）拿到实际内容才能回答。光调 get_document_stats 只看元信息是不够的。\n' +
+      '- 用户说"多长/几节/多少字/结构/大纲" → get_document_stats 或 get_outline 即可。\n' +
+      '- 用户说"找/搜索某内容" → find_text。\n' +
+      '- 用户说"改/替换/插入/追加/删除/重写" → 视情况 read + write 工具组合，多步任务必须 tool 链执行到底。\n' +
+      '\n【工具列表】\n' +
       '- read_all_lines: 一次性读完全部行（适合 < 2000 行的小文档；大文档建议分块 read_lines）\n' +
-      '- get_outline: 查看文档大纲（所有标题及层级），多步编辑前建议先调用\n' +
       '- read_lines(start_line, end_line): 读指定行范围（1-indexed，闭区间）\n' +
+      '- get_document_stats: 拿文档规模（行数/字符数/标题列表/段落数），回答"多长/几节"这类问题时用\n' +
+      '- get_outline: 查看文档大纲（所有标题及层级），多步编辑前建议先调用\n' +
       '- find_text(query): 查找文本在哪些行出现，返回行号和片段\n' +
       '- replace_lines(start_line, end_line, new_content): 替换指定行范围\n' +
       '- replace_section(heading, new_content): 替换某个标题下的整个章节内容（标题本身保留）\n' +
@@ -3668,8 +3674,11 @@
       '- append_to_end(content): 在文档末尾追加内容（自动补空行）\n' +
       '- prepend_to_start(content): 在文档开头插入内容（自动补空行）\n' +
       '- replace_selection(new_content): 替换用户当前光标选中的文字（用户在系统提示中会告诉你选区内容）\n' +
-      '用户的消息里如果带了【当前用户选区】块，说明他在编辑器里选中了一段文字，按指令改完后用 replace_selection 工具改写并替换。' +
-      '每次工具调用后你会收到 JSON 结果，结果作为上下文继续。完成所有编辑后用一句简短中文告诉用户改了什么。';
+      '\n【执行规则】\n' +
+      '1. 工具调用是链式的：read → think → write → read → think → ... 一直到任务完成。\n' +
+      '2. 调完工具会收到 JSON 结果，结果作为上下文继续。\n' +
+      '3. 用户消息里如果带了【当前用户选区】块，说明他在编辑器里选中了一段文字，按指令改完后用 replace_selection 工具改写并替换。\n' +
+      '4. 完成所有编辑后用一句简短中文告诉用户改了什么。';
 
     // 工具定义（OpenAI tools 格式）
     const AI_TOOLS = [

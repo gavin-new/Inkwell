@@ -61,9 +61,11 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16m patch: 51（AI 卡片折叠时藏掉 .ai-status / .ai-model-select / .ai-input-area，
-    //                  不然 36px header + 65px 输入区 = 101px 高，跟其他 38px 卡片栏不齐）
-    private const string ResourcesVersion = "51";
+    // V0.16n patch: 52（AI 工具 system prompt 优化：把"按用户意图选工具"放最前，
+    //                  显式说"读/总结/翻译/改"必须 read_all_lines/read_lines 先拿到内容，
+    //                  不能光调 get_document_stats 看元信息就当读完了；
+    //                  + 工具列表重排序：read 工具在前，write 工具在后）
+    private const string ResourcesVersion = "52";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
