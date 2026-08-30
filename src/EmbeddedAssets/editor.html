@@ -488,6 +488,14 @@
     .right-pane-bottom.pane-collapsed > .pane-header {
       border-bottom: none;
     }
+    /* V0.16l: AI 卡片折叠时藏掉 status 灯 + model select + 输入区
+       否则 header 撑到 36px + 65px 输入区 = 101px 高，
+       跟其他 38px 的卡片栏视觉不统一 */
+    .right-pane-bottom.pane-collapsed .ai-status,
+    .right-pane-bottom.pane-collapsed .ai-model-select,
+    .right-pane-bottom.pane-collapsed .ai-input-area {
+      display: none;
+    }
     .left-pane-top, .left-pane-bottom,
     .right-pane-top, .right-pane-bottom {
       display: flex;

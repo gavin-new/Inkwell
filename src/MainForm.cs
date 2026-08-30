@@ -61,9 +61,9 @@ public sealed class MainForm : Form
     //            失败降级 ms-settings:defaultapps）
     // V0.15k: 31（DOCX 只读预览：mammoth.js 嵌入 vendor/，二进制走 base64 通道，
     //            ApiBridge 区分 .docx/.doc 返回 contentBase64，editor 切 readonly）
-    // V0.16l patch: 50（折叠面板改为只隐藏 content，保留卡片栏（pane + header），
-    //                  pane-collapsed class 让 flex 收缩到 header 高度）
-    private const string ResourcesVersion = "50";
+    // V0.16m patch: 51（AI 卡片折叠时藏掉 .ai-status / .ai-model-select / .ai-input-area，
+    //                  不然 36px header + 65px 输入区 = 101px 高，跟其他 38px 卡片栏不齐）
+    private const string ResourcesVersion = "51";
     private const string VersionFile = ".version";
     private const string WwwRootZipResource = "Inkwell.wwwroot.zip";
 
